@@ -1,8 +1,8 @@
 // Drag and drop for the board and the backlog, plus keyboard/menu alternatives.
 // The DOM moves first for responsiveness; the server decides, and on rejection the view is
 // re-rendered from the database so nothing shows a state that was not saved.
-import { api, toast, refresh, afterSuccess } from './core.js?v=1.14.0';
-import { openTask } from './drawer.js?v=1.14.0';
+import { api, toast, refresh, afterSuccess } from './core.js?v=1.15.0';
+import { openTask } from './drawer.js?v=1.15.0';
 
 const THRESHOLD = 6;
 const INTERACTIVE = 'button, a, input, select, textarea, label, .menu';

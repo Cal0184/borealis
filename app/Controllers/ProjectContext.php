@@ -19,6 +19,7 @@ final class ProjectContext
         $p = Projects::withProgress([Projects::find($r->intParam('id'))])[0];
         if ($module) Modules::require($p, $module);
         $modules = Modules::enabled((int)$p['id']);
+        \Borealis\Services\Navigation::touch('project', (int)$p['id']);
         $perms = Policy::projectPerms($p);
         $editable = !$p['archived_at'];
         return [

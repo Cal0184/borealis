@@ -33,6 +33,8 @@ final class Notifications
         'sprint' => 'Sprint',
         'weekly' => 'Resumen semanal',
         'monitor' => 'Monitoreo',
+        'watch' => 'Tarea que sigues',
+        'automation' => 'Automatización',
     ];
 
     /** What the person chooses to receive. key => [label, description, push by default]. */
@@ -47,6 +49,8 @@ final class Notifications
         'comments' => ['Menciones y comentarios', 'Te mencionan o comentan una tarea tuya.', false],
         'capacity' => ['Capacidad', 'Alguien completó sus horas de la semana y aún tiene tareas planificadas pendientes.', false],
         'weekly' => ['Resumen semanal', 'Los lunes por la mañana: lo que vence en la semana y lo vencido.', false],
+        'watching' => ['Tareas que sigues', 'Comentarios y cambios de estado en tareas que sigues sin ser responsable (1.15). Comentar en una tarea te hace seguirla; puedes dejar de seguirla cuando quieras.', false],
+        'automation' => ['Automatizaciones', 'Avisos que envían las reglas automáticas del espacio: tareas vencidas, bloqueos resueltos, revisiones pendientes (1.15).', true],
         'monitor' => ['Alertas de monitoreo', 'Bloqueos, dependencias en riesgo, sobrecarga y desviaciones (1.12). Primero a quien es responsable; si nadie la revisa, a quien lleva el proyecto y, si es crítica, a la administración.', true],
     ];
 
@@ -66,6 +70,7 @@ final class Notifications
             'mention', 'comment' => 'comments',
             'status', 'team' => 'project',
             'weekly' => 'weekly',
+            'watch' => 'watching',
             default => isset(self::CATEGORIES[$type]) ? $type : 'project',
         };
     }

@@ -1,5 +1,5 @@
 // Task detail drawer: opens a task over the current view without losing filters or scroll.
-import { appUrl, isDirty, runInit, toast, refresh, confirmAction } from './core.js?v=1.14.0';
+import { appUrl, isDirty, runInit, toast, refresh, confirmAction } from './core.js?v=1.15.0';
 
 const drawer = () => document.getElementById('drawer');
 let lastOpener = null;

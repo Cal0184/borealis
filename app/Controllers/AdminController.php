@@ -120,7 +120,7 @@ final class AdminController
     private static function auditFilters(Request $r): array
     {
         $f = [];
-        foreach (['user_id', 'project_id', 'category', 'action', 'source', 'from', 'to', 'q', 'type', 'kind', 'result', 'before'] as $k) $f[$k] = is_scalar($r->q($k)) ? trim((string)$r->q($k)) : null;
+        foreach (['user_id', 'project_id', 'task_id', 'category', 'action', 'source', 'from', 'to', 'q', 'type', 'kind', 'result', 'before'] as $k) $f[$k] = is_scalar($r->q($k)) ? trim((string)$r->q($k)) : null;
         // quick periods: hoy, 7 / 30 / 90 días, or this week, month, quarter or year (the same as Análisis)
         $f['period'] = null;
         if (is_string($r->q('period')) && $r->q('period') !== '') {
@@ -133,6 +133,15 @@ final class AdminController
     }
 
     /** 1.14 · Administración › Notificaciones: does the scheduled job run, and are notices delivered. */
+    /** 1.15 · Automatizaciones: ready templates (event → condition → action) the administration turns on. */
+    public function automations(Request $r): Response
+    {
+        $this->guard('workspace.manage');
+        $runs = \Borealis\Services\Activity::search(['category' => 'automation'], 15, 0);
+        return View::page('admin/automations', $this->base('automations') + ['rules' => \Borealis\Services\Automations::rules(), 'runs' => $runs,
+            'projects' => Database::get()->all('SELECT id, name FROM projects WHERE workspace_id = ? AND archived_at IS NULL ORDER BY name', [Policy::wsId()]), 'title' => 'Automatizaciones']);
+    }
+
     public function notifications(Request $r): Response
     {
         $this->guard('workspace.manage');

@@ -22,6 +22,9 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         <?php if ($done): ?><span class="badge success"><?= icon('check', 'sm') ?> Finalizada</span><?php endif; ?>
       </div>
     </div>
+    <?php $watching = \Borealis\Services\Watchers::isWatching($tid); $fav = \Borealis\Services\Navigation::isFavorite('task', $tid); ?>
+    <button class="btn btn--ghost btn--sm" type="button" data-call="/api/tasks/<?= $tid ?>/watch" data-watch aria-pressed="<?= $watching ? 'true' : 'false' ?>" title="<?= $watching ? 'Dejar de seguir: ya no recibirás avisos de comentarios y cambios de estado' : 'Seguir: recibe avisos de comentarios y cambios de estado' ?>"><?= icon('eye', 'sm') ?> <span class="hide-sm"><?= $watching ? 'Siguiendo' : 'Seguir' ?></span></button>
+    <button class="btn btn--ghost btn--icon btn--sm fav-btn" type="button" data-favorite="task:<?= $tid ?>" aria-pressed="<?= $fav ? 'true' : 'false' ?>" aria-label="Favorito" title="<?= $fav ? 'Quitar de favoritos' : 'Agregar a favoritos' ?>"><?= icon('star', 'sm') ?></button>
     <?php if ($inDrawer): ?><a class="btn btn--ghost btn--sm hide-sm" href="<?= e(url('/t/' . $t['task_key'])) ?>"><?= icon('external', 'sm') ?> Abrir página</a><?php endif; ?>
     <div class="menu-wrap">
       <button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu aria-label="Más acciones" aria-haspopup="true" aria-expanded="false"><?= icon('more') ?></button>
@@ -63,31 +66,6 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         </div>
       </section>
 
-      <section class="task-section">
-        <h3><?= icon('link') ?> Enlaces de trabajo</h3>
-        <div id="td-worklinks" class="work-links" data-region>
-          <?php foreach ([
-              'drive_url' => ['Carpeta de Drive', 'folder', 'https://drive.google.com/drive/folders/…', 'Sin carpeta de Drive.', 'Enlace de la carpeta de Drive copiado', 'drive'],
-              'github_url' => ['Repositorio de GitHub', 'code', 'https://github.com/organización/repositorio', 'Sin repositorio de GitHub.', 'Enlace del repositorio de GitHub copiado', 'github'],
-          ] as $lk => [$lLabel, $lIcon, $lPh, $lNone, $lMsg, $lSlug]): $lUrl = (string)($t[$lk] ?? ''); $lId = 'td-' . $lSlug . '-' . $tid; ?>
-            <div class="work-link" data-work-link="<?= e($lSlug) ?>">
-              <label class="work-link-label" for="<?= e($lId) ?>"><?= icon($lIcon, 'sm') ?> <?= e($lLabel) ?></label>
-              <div class="work-link-row">
-                <?php if ($edit): ?>
-                  <input class="input sm work-link-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" maxlength="500" id="<?= e($lId) ?>" name="<?= e($lk) ?>" value="<?= e($lUrl) ?>" placeholder="<?= e($lPh) ?>" data-patch="<?= e($patch) ?>">
-                <?php elseif ($lUrl): ?>
-                  <a class="work-link-url truncate" id="<?= e($lId) ?>" href="<?= e($lUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($lUrl) ?></a>
-                <?php else: ?>
-                  <span class="work-link-url muted" id="<?= e($lId) ?>"><?= e($lNone) ?></span>
-                <?php endif; ?>
-                <button class="btn btn--sm" type="button" data-copy="<?= e($lUrl) ?>"<?= $edit ? ' data-copy-from="#' . e($lId) . '"' : '' ?> data-copy-msg="<?= e($lMsg) ?>" aria-label="Copiar enlace: <?= e(mb_strtolower($lLabel)) ?>"<?= !$edit && !$lUrl ? ' disabled' : '' ?>><?= icon('copy', 'sm') ?> Copiar</button>
-                <?php if ($lUrl): ?><a class="btn btn--ghost btn--sm btn--icon" href="<?= e($lUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Abrir <?= e(mb_strtolower($lLabel)) ?> en otra pestaña" title="Abrir en otra pestaña"><?= icon('external', 'sm') ?></a><?php endif; ?>
-              </div>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </section>
-
       <?php if (!$t['parent_id']): ?>
       <section class="task-section subtasks">
         <div id="td-subtasks" data-region>
@@ -118,7 +96,7 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
 
       <section class="task-section">
         <div id="td-links" data-region>
-          <h3><?= icon('link') ?> Relaciones <span class="count"><?= count($links) ?></span></h3>
+          <h3><?= icon('link') ?> Dependencias y relaciones <span class="count"><?= count($links) ?></span></h3>
           <?php if ($links): ?>
             <ul class="list">
               <?php foreach ($links as $l):
@@ -170,6 +148,74 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
               <span class="small" style="display:block">Máximo <?= round((int)config('uploads.max_bytes', 10485760) / 1048576) ?> MB por archivo</span>
             </label>
             <div class="form-error mt" data-form-error></div>
+          </form>
+        <?php endif; ?>
+      </section>
+
+      <section class="task-section">
+        <h3><?= icon('link') ?> Enlaces de trabajo</h3>
+        <div id="td-worklinks" class="work-links" data-region>
+          <?php foreach ([
+              'drive_url' => ['Carpeta de Drive', 'folder', 'https://drive.google.com/drive/folders/…', 'Sin carpeta de Drive.', 'Enlace de la carpeta de Drive copiado', 'drive'],
+              'github_url' => ['Repositorio de GitHub', 'code', 'https://github.com/organización/repositorio', 'Sin repositorio de GitHub.', 'Enlace del repositorio de GitHub copiado', 'github'],
+          ] as $lk => [$lLabel, $lIcon, $lPh, $lNone, $lMsg, $lSlug]): $lUrl = (string)($t[$lk] ?? ''); $lId = 'td-' . $lSlug . '-' . $tid; ?>
+            <div class="work-link" data-work-link="<?= e($lSlug) ?>">
+              <label class="work-link-label" for="<?= e($lId) ?>"><?= icon($lIcon, 'sm') ?> <?= e($lLabel) ?></label>
+              <div class="work-link-row">
+                <?php if ($edit): ?>
+                  <input class="input sm work-link-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" maxlength="500" id="<?= e($lId) ?>" name="<?= e($lk) ?>" value="<?= e($lUrl) ?>" placeholder="<?= e($lPh) ?>" data-patch="<?= e($patch) ?>">
+                <?php elseif ($lUrl): ?>
+                  <a class="work-link-url truncate" id="<?= e($lId) ?>" href="<?= e($lUrl) ?>" target="_blank" rel="noopener noreferrer"><?= e($lUrl) ?></a>
+                <?php else: ?>
+                  <span class="work-link-url muted" id="<?= e($lId) ?>"><?= e($lNone) ?></span>
+                <?php endif; ?>
+                <button class="btn btn--sm" type="button" data-copy="<?= e($lUrl) ?>"<?= $edit ? ' data-copy-from="#' . e($lId) . '"' : '' ?> data-copy-msg="<?= e($lMsg) ?>" aria-label="Copiar enlace: <?= e(mb_strtolower($lLabel)) ?>"<?= !$edit && !$lUrl ? ' disabled' : '' ?>><?= icon('copy', 'sm') ?> Copiar</button>
+                <?php if ($lUrl): ?><a class="btn btn--ghost btn--sm btn--icon" href="<?= e($lUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Abrir <?= e(mb_strtolower($lLabel)) ?> en otra pestaña" title="Abrir en otra pestaña"><?= icon('external', 'sm') ?></a><?php endif; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </section>
+
+      <section class="task-section">
+        <div id="td-comments" data-region>
+          <h3><?= icon('message') ?> Comentarios <span class="count"><?= count($comments) ?></span></h3>
+          <?php foreach ($comments as $c): $mine = (int)$c['user_id'] === Auth::id(); ?>
+            <div class="comment<?= !empty($c['is_decision']) ? ' is-decision' : '' ?>" id="comment-<?= (int)$c['id'] ?>">
+              <?= avatar($c['user_name'] ? ['id' => $c['user_id'], 'name' => $c['user_name'], 'avatar_color' => $c['avatar_color']] : null, 'sm') ?>
+              <div class="comment-body">
+                <div class="comment-meta">
+                  <strong><?= e($c['user_name'] ?? 'Usuario eliminado') ?></strong>
+                  <?php if (!empty($c['is_decision'])): ?><span class="badge success" title="Aparece en las decisiones del proyecto"><?= icon('flag-check', 'sm') ?> Decisión</span><?php endif; ?>
+                  <span class="muted" title="<?= e(fmt_datetime($c['created_at'])) ?>"><?= e(time_ago($c['created_at'])) ?><?= $c['edited_at'] ? ' · editado' : '' ?></span>
+                  <span class="comment-actions">
+                    <?php if ($mine && $can('comment.create')): ?><button class="btn btn--ghost btn--icon btn--sm" type="button" data-toggle="#cv-<?= (int)$c['id'] ?>,#ce-<?= (int)$c['id'] ?>" aria-label="Editar comentario"><?= icon('edit', 'sm') ?></button><?php endif; ?>
+                    <?php if ($mine || $can('project.manage')): ?><button class="btn btn--ghost btn--icon btn--sm" type="button" data-call="/api/comments/<?= (int)$c['id'] ?>" data-method="DELETE" data-confirm="¿Eliminar este comentario?" data-confirm-label="Eliminar" aria-label="Eliminar comentario"><?= icon('trash', 'sm') ?></button><?php endif; ?>
+                  </span>
+                </div>
+                <div class="rich" id="cv-<?= (int)$c['id'] ?>"><?= rich_text($c['body']) ?></div>
+                <?php if ($mine): ?>
+                  <form id="ce-<?= (int)$c['id'] ?>" hidden data-api="/api/comments/<?= (int)$c['id'] ?>" data-method="PATCH">
+                    <textarea class="textarea" name="body" rows="3" required maxlength="10000"><?= e($c['body']) ?></textarea>
+                    <div class="form-actions start"><button class="btn btn--primary btn--sm" type="submit">Guardar</button><button class="btn btn--sm" type="button" data-toggle="#cv-<?= (int)$c['id'] ?>,#ce-<?= (int)$c['id'] ?>" data-reset-form>Cancelar</button></div>
+                  </form>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
+          <?php if (!$comments): ?><p class="muted small">Todavía no hay comentarios.</p><?php endif; ?>
+        </div>
+        <?php if ($can('comment.create')): ?>
+          <form class="comment" data-api="/api/tasks/<?= $tid ?>/comments" data-reset>
+            <?= avatar(Auth::user(), 'sm') ?>
+            <div style="flex:1;min-width:0;position:relative">
+              <div class="form-error" data-form-error></div>
+              <label class="sr-only" for="td-comment-<?= $tid ?>">Comentario</label>
+              <textarea class="textarea" id="td-comment-<?= $tid ?>" name="body" rows="2" maxlength="10000" required placeholder="Escribe un comentario. Usa @ para mencionar." data-mentions="/api/projects/<?= $pid ?>/members"></textarea>
+              <div class="form-actions start"><button class="btn btn--primary btn--sm" type="submit">Comentar</button>
+                <label class="check small" title="Las decisiones quedan en el registro del proyecto, con quién y cuándo"><input type="checkbox" name="decision" value="1"> Es una decisión</label>
+                <span class="muted small hide-sm">Ctrl + Enter para enviar</span></div>
+            </div>
           </form>
         <?php endif; ?>
       </section>
@@ -264,48 +310,8 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
       </section>
 
       <section class="task-section">
-        <div id="td-comments" data-region>
-          <h3><?= icon('message') ?> Comentarios <span class="count"><?= count($comments) ?></span></h3>
-          <?php foreach ($comments as $c): $mine = (int)$c['user_id'] === Auth::id(); ?>
-            <div class="comment" id="comment-<?= (int)$c['id'] ?>">
-              <?= avatar($c['user_name'] ? ['id' => $c['user_id'], 'name' => $c['user_name'], 'avatar_color' => $c['avatar_color']] : null, 'sm') ?>
-              <div class="comment-body">
-                <div class="comment-meta">
-                  <strong><?= e($c['user_name'] ?? 'Usuario eliminado') ?></strong>
-                  <span class="muted" title="<?= e(fmt_datetime($c['created_at'])) ?>"><?= e(time_ago($c['created_at'])) ?><?= $c['edited_at'] ? ' · editado' : '' ?></span>
-                  <span class="comment-actions">
-                    <?php if ($mine && $can('comment.create')): ?><button class="btn btn--ghost btn--icon btn--sm" type="button" data-toggle="#cv-<?= (int)$c['id'] ?>,#ce-<?= (int)$c['id'] ?>" aria-label="Editar comentario"><?= icon('edit', 'sm') ?></button><?php endif; ?>
-                    <?php if ($mine || $can('project.manage')): ?><button class="btn btn--ghost btn--icon btn--sm" type="button" data-call="/api/comments/<?= (int)$c['id'] ?>" data-method="DELETE" data-confirm="¿Eliminar este comentario?" data-confirm-label="Eliminar" aria-label="Eliminar comentario"><?= icon('trash', 'sm') ?></button><?php endif; ?>
-                  </span>
-                </div>
-                <div class="rich" id="cv-<?= (int)$c['id'] ?>"><?= rich_text($c['body']) ?></div>
-                <?php if ($mine): ?>
-                  <form id="ce-<?= (int)$c['id'] ?>" hidden data-api="/api/comments/<?= (int)$c['id'] ?>" data-method="PATCH">
-                    <textarea class="textarea" name="body" rows="3" required maxlength="10000"><?= e($c['body']) ?></textarea>
-                    <div class="form-actions start"><button class="btn btn--primary btn--sm" type="submit">Guardar</button><button class="btn btn--sm" type="button" data-toggle="#cv-<?= (int)$c['id'] ?>,#ce-<?= (int)$c['id'] ?>" data-reset-form>Cancelar</button></div>
-                  </form>
-                <?php endif; ?>
-              </div>
-            </div>
-          <?php endforeach; ?>
-          <?php if (!$comments): ?><p class="muted small">Todavía no hay comentarios.</p><?php endif; ?>
-        </div>
-        <?php if ($can('comment.create')): ?>
-          <form class="comment" data-api="/api/tasks/<?= $tid ?>/comments" data-reset>
-            <?= avatar(Auth::user(), 'sm') ?>
-            <div style="flex:1;min-width:0;position:relative">
-              <div class="form-error" data-form-error></div>
-              <label class="sr-only" for="td-comment-<?= $tid ?>">Comentario</label>
-              <textarea class="textarea" id="td-comment-<?= $tid ?>" name="body" rows="2" maxlength="10000" required placeholder="Escribe un comentario. Usa @ para mencionar." data-mentions="/api/projects/<?= $pid ?>/members"></textarea>
-              <div class="form-actions start"><button class="btn btn--primary btn--sm" type="submit">Comentar</button><span class="muted small">Ctrl + Enter para enviar</span></div>
-            </div>
-          </form>
-        <?php endif; ?>
-      </section>
-
-      <section class="task-section">
         <div id="td-history" data-region>
-          <h3><?= icon('clock') ?> Historial</h3>
+          <h3><?= icon('clock') ?> Historial<?php if (\Borealis\Security\Policy::can('audit.view')): ?> <a class="small muted" href="<?= e(url('/admin/audit', ['task_id' => $tid])) ?>">Ver con antes y después</a><?php endif; ?></h3>
           <ul class="history">
             <?php foreach ($history as $h): ?>
               <li><span><strong><?= e($h['user_name'] ?? 'Sistema') ?></strong> <?= e(lcfirst($h['summary'])) ?> <span class="muted">· <?= e(time_ago($h['created_at'])) ?></span></span></li>
@@ -397,6 +403,16 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         <dd class="ts-inline"><input class="input sm ts-control ts-num" type="number" min="0" step="0.5" id="td-eh-<?= $tid ?>" name="estimate_hours" value="<?= e($num($t['estimate_hours'])) ?>" placeholder="—" data-patch="<?= e($patch) ?>"<?= $dis ?>><span class="muted small">h</span>
           <?php if ($modules['estimates']): ?><label class="sr-only" for="td-est-<?= $tid ?>">Estimación en puntos</label><input class="input sm ts-control ts-num" type="number" min="0" step="0.5" id="td-est-<?= $tid ?>" name="estimate" value="<?= e($num($t['estimate'])) ?>" placeholder="—" data-patch="<?= e($patch) ?>"<?= $dis ?>><span class="muted small">pts</span><?php endif; ?></dd>
         <?php if ($edit && !$t['parent_id']): ?><dd class="ts-suggest"><button class="link-btn small" type="button" data-estimate-suggest data-task="<?= $tid ?>" data-for="#td-eh-<?= $tid ?>">Sugerencia según el historial</button><div data-estimate-out></div></dd><?php endif; ?>
+        <?php
+          $realMin = (int)\Borealis\Core\Database::get()->value('SELECT COALESCE(SUM(minutes), 0) FROM time_entries WHERE task_id = ?', [$tid]);
+          $sct = (int)($t['subtask_count'] ?? 0); $scd = (int)($t['subtask_done'] ?? 0);
+          $prog = $done ? 100 : ($sct ? (int)round($scd / $sct * 100) : ($est ? min(99, (int)round($realMin / 60 / $est * 100)) : null));
+          $progWhy = $done ? 'finalizada' : ($sct ? "$scd de $sct subtareas" : ($est ? 'horas registradas sobre las estimadas' : ''));
+        ?>
+        <dt>Real</dt>
+        <dd data-real-hours><?= $realMin ? e(\Borealis\Services\TimeEntries::fmt($realMin)) : '<span class="muted">Sin registros</span>' ?></dd>
+        <dt>Progreso</dt>
+        <dd data-progress><?php if ($prog !== null): ?><span class="progress sm" title="<?= e($progWhy) ?>"><span style="--p:<?= $prog ?>%"></span></span> <span class="small"><?= $prog ?> %</span> <span class="muted small"><?= e($progWhy) ?></span><?php else: ?><span class="muted small">Se calcula con subtareas o con horas estimadas</span><?php endif; ?></dd>
 
         <?php if ($modules['sprints'] && !$t['parent_id']): ?>
           <dt><label for="td-sprint-<?= $tid ?>">Sprint</label></dt>

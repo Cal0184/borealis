@@ -130,13 +130,70 @@ final class CalendarController
             });
             $safe('projects', fn() => ['teamDone' => Tasks::query(['assignee' => 'me', 'with_subtasks' => 1, 'category' => ['done'], 'sort' => 'updated', 'limit' => 100])]);
         } else {
-            $safe('projects', function () use ($r) {
-                $f = ['with_subtasks' => 1, 'category' => ['todo', 'in_progress'], 'sort' => 'due', 'limit' => 300];
-                if ($r->q('project_id')) $f['project_id'] = (int)$r->q('project_id');
-                return self::withEditing(Tasks::query($f)) + ['projects' => Projects::list()];
-            });
+            $safe('projects', fn() => self::teamTasks($r));
         }
         return View::page('tasks/index', $data);
+    }
+
+    public const VIEWS = ['table' => 'Tabla', 'list' => 'Lista compacta', 'board' => 'Tablero'];
+    public const GROUPS = ['none' => 'Sin agrupar', 'project' => 'Proyecto', 'assignee' => 'Responsable', 'status' => 'Estado', 'due' => 'Fecha'];
+    private const PAGE = 100;
+
+    /**
+     * 1.15 · «Tareas › Equipo»: the open tasks of every project the person can see, as a table, a
+     * compact list or a board, grouped by project, person, state or date, with filters that can be
+     * saved. The chosen view and grouping are remembered in the profile. Results come in pages of 100
+     * so a large workspace never loads everything at once.
+     */
+    private static function teamTasks(Request $r): array
+    {
+        $prefs = \Borealis\Core\Auth::user()['prefs'] ?? [];
+        $view = array_key_exists((string)$r->q('view'), self::VIEWS) ? (string)$r->q('view') : ($prefs['task_view'] ?? 'table');
+        $group = array_key_exists((string)$r->q('group'), self::GROUPS) ? (string)$r->q('group') : ($prefs['task_group'] ?? 'none');
+        if (!isset(self::VIEWS[$view])) $view = 'table';
+        if (!isset(self::GROUPS[$group])) $group = 'none';
+        if (($r->q('view') && $view !== ($prefs['task_view'] ?? null)) || ($r->q('group') && $group !== ($prefs['task_group'] ?? null))) {
+            try { \Borealis\Services\Users::savePrefs(['task_view' => $view, 'task_group' => $group]); } catch (\Throwable) {}
+        }
+        $f = ['with_subtasks' => 1, 'category' => ['todo', 'in_progress'], 'sort' => 'due'];
+        if ($r->q('project_id')) $f['project_id'] = (int)$r->q('project_id');
+        if (is_string($r->q('assignee')) && preg_match('/^(me|none|\d+)$/', (string)$r->q('assignee'))) $f['assignee'] = (string)$r->q('assignee');
+        if ($r->q('priority_id')) $f['priority_id'] = (int)$r->q('priority_id');
+        if (is_string($r->q('q')) && trim((string)$r->q('q')) !== '') $f['q'] = mb_substr(trim((string)$r->q('q')), 0, 80);
+        if ($r->q('blocked') === '1') $f['blocked'] = 1;
+        $due = (string)$r->q('due');
+        if ($due === 'overdue') $f['overdue'] = 1;
+        elseif ($due === 'week') { $f['due_from'] = today(); $f['due_to'] = date('Y-m-d', strtotime(today() . ' +7 days')); }
+        elseif ($due === 'none') $f['no_date'] = 1;
+        $page = max(1, (int)$r->q('page', 1));
+        $rows = Tasks::query($f + ['limit' => self::PAGE * $page + 1]);
+        $more = count($rows) > self::PAGE * $page;
+        $rows = array_slice($rows, 0, self::PAGE * $page);
+        $out = self::withEditing($rows) + ['projects' => Projects::list(), 'view' => $view, 'group' => $group, 'page' => $page, 'hasMore' => $more,
+            'people' => \Borealis\Services\Workspaces::members(false), 'priorities' => \Borealis\Services\Workspaces::priorities(), 'savedViews' => \Borealis\Services\SavedViews::list()];
+        $out['grouped'] = self::groupTasks($rows, $group);
+        return $out;
+    }
+
+    /** [label => tasks] in a stable, meaningful order. */
+    public static function groupTasks(array $rows, string $group): array
+    {
+        if ($group === 'none') return ['' => $rows];
+        $today = today();
+        $week = date('Y-m-d', strtotime($today . ' +7 days'));
+        $out = [];
+        foreach ($rows as $t) {
+            $k = match ($group) {
+                'project' => $t['project_name'],
+                'assignee' => $t['assignee_name'] ?: ($t['team_name'] ?? null ?: 'Sin responsable'),
+                'status' => $t['status_name'],
+                'due' => !$t['due_date'] ? '5 Sin fecha' : ($t['due_date'] < $today ? '1 Vencidas' : ($t['due_date'] === $today ? '2 Hoy' : ($t['due_date'] <= $week ? '3 Próximos 7 días' : '4 Más adelante'))),
+            };
+            $out[$k][] = $t;
+        }
+        if ($group === 'due') { ksort($out); $out = array_combine(array_map(fn($k) => substr($k, 2), array_keys($out)), array_values($out)); }
+        elseif ($group !== 'status') uksort($out, fn($a, $b) => (in_array($a, ['Sin responsable'], true) <=> in_array($b, ['Sin responsable'], true)) ?: strcoll($a, $b));
+        return $out;
     }
 
     /** Open project tasks where the person is responsible (main, co-assignee or through a team), by due date. */

@@ -231,6 +231,52 @@ final class WorkspaceApi
         return Response::ok(['unread' => Notifications::unreadCount(), 'latest' => $latest, 'items' => $after ? $items : []], '');
     }
 
+    /** 1.15 · star / unstar a project, task or team (sidebar «Favoritos»). */
+    public function favorite(Request $r): Response
+    {
+        $in = $r->input();
+        $on = \Borealis\Services\Navigation::toggleFavorite((string)($in['type'] ?? ''), (int)($in['id'] ?? 0));
+        return Response::ok(['favorite' => $on], $on ? 'Agregado a favoritos' : 'Quitado de favoritos');
+    }
+
+    /** 1.15 · automations (administration) */
+    public function createAutomation(Request $r): Response
+    {
+        $id = \Borealis\Services\Automations::create($r->input());
+        return Response::ok(['id' => $id], 'Automatización activada');
+    }
+
+    public function updateAutomation(Request $r): Response
+    {
+        \Borealis\Services\Automations::update($r->intParam('id'), $r->input());
+        return Response::ok([], 'Automatización guardada');
+    }
+
+    public function deleteAutomation(Request $r): Response
+    {
+        \Borealis\Services\Automations::delete($r->intParam('id'));
+        return Response::ok([], 'Automatización eliminada');
+    }
+
+    /** 1.15 · saved task filters */
+    public function saveView(Request $r): Response
+    {
+        $id = \Borealis\Services\SavedViews::create($r->input());
+        return Response::ok(['id' => $id], 'Vista guardada');
+    }
+
+    public function deleteView(Request $r): Response
+    {
+        \Borealis\Services\SavedViews::delete($r->intParam('id'));
+        return Response::ok([], 'Vista borrada');
+    }
+
+    /** 1.15 · favorites and recently opened items, for the quick search before typing. */
+    public function navRecent(Request $r): Response
+    {
+        return Response::ok(['favorites' => \Borealis\Services\Navigation::favorites(), 'recent' => \Borealis\Services\Navigation::recent(8)], '');
+    }
+
     public function readAll(Request $r): Response
     {
         Notifications::markAllRead();

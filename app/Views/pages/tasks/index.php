@@ -227,27 +227,116 @@ $subs = ['mine' => 'Lo que te asignaron en los proyectos y tus tareas personales
 <?php else: ?>
 <?php if (!empty($errors['projects'])): ?><?= $loadError('las tareas del equipo') ?>
 <?php else: ?>
-<form class="toolbar" method="get" action="<?= e(url('/tasks')) ?>">
+<?php
+  $view ??= 'table'; $group ??= 'none'; $grouped ??= ['' => $tasks]; $savedViews ??= [];
+  $keep = array_filter(array_intersect_key($filters, array_flip(\Borealis\Services\SavedViews::KEYS)), fn($v) => is_scalar($v) && $v !== '');
+  $qsNow = http_build_query(array_diff_key($keep, ['view' => 1, 'group' => 1]) + ['view' => $view, 'group' => $group]);
+  $nFilters = count(array_diff_key($keep, ['view' => 1, 'group' => 1]));
+?>
+<?php if ($savedViews || $nFilters): ?>
+<nav class="chips saved-views mb" aria-label="Vistas guardadas" data-saved-views>
+  <?php foreach ($savedViews as $sv): parse_str($sv['query'], $svq); $on = $svq == array_diff_key($keep, ['page' => 1]) ; ?>
+    <span class="chip-wrap"><a class="chip<?= $on ? ' is-on' : '' ?>" href="<?= e(url('/tasks', ['tab' => 'team'] + $svq)) ?>" title="<?= $sv['shared'] ? 'Compartida por ' . e($sv['owner_name']) : 'Solo tú la ves' ?>"><?= $sv['shared'] ? icon('users', 'sm') . ' ' : '' ?><?= e($sv['name']) ?></a><?php if ((int)$sv['user_id'] === \Borealis\Core\Auth::id()): ?><button class="chip-x" type="button" data-call="/api/views/<?= (int)$sv['id'] ?>" data-method="DELETE" aria-label="Borrar la vista «<?= e($sv['name']) ?>»"><?= icon('x', 'sm') ?></button><?php endif; ?></span>
+  <?php endforeach; ?>
+  <?php if ($nFilters): ?>
+    <details class="save-view"><summary class="chip"><?= icon('plus', 'sm') ?> Guardar esta vista</summary>
+      <form class="card save-view-form" data-api="/api/views" data-reset>
+        <input type="hidden" name="query" value="<?= e($qsNow) ?>">
+        <label class="field"><span>Nombre</span><input class="input" name="name" maxlength="80" required placeholder="Ej.: Urgentes de mi equipo"></label>
+        <?php if (\Borealis\Security\Policy::can('projects.create')): ?><label class="check small"><input type="checkbox" name="shared" value="1"> Compartir con todo el espacio (cada persona verá solo lo que puede ver)</label><?php endif; ?>
+        <button class="btn btn--primary btn--sm" type="submit">Guardar</button>
+      </form>
+    </details>
+  <?php endif; ?>
+</nav>
+<?php endif; ?>
+<form class="toolbar wrap" method="get" action="<?= e(url('/tasks')) ?>" data-task-filters>
   <?php if (!config('app.pretty_urls', true)): ?><input type="hidden" name="r" value="/tasks"><?php endif; ?>
   <input type="hidden" name="tab" value="<?= e($tab) ?>">
+  <label class="sr-only" for="tk-q">Buscar</label>
+  <input class="input<?= !empty($filters['q']) ? ' filter-active' : '' ?>" type="search" id="tk-q" name="q" value="<?= e($filters['q'] ?? '') ?>" placeholder="Filtrar por texto" style="max-width:200px">
   <label class="sr-only" for="tk-p">Proyecto</label>
   <select class="select<?= !empty($filters['project_id']) ? ' filter-active' : '' ?>" id="tk-p" name="project_id" data-autosubmit>
     <option value="">Todos los proyectos</option>
     <?php foreach ($projects as $p): ?><option value="<?= (int)$p['id'] ?>"<?= selected($p['id'], $filters['project_id'] ?? '') ?>><?= e($p['name']) ?></option><?php endforeach; ?>
   </select>
+  <label class="sr-only" for="tk-a">Responsable</label>
+  <select class="select<?= !empty($filters['assignee']) ? ' filter-active' : '' ?>" id="tk-a" name="assignee" data-autosubmit>
+    <option value="">Cualquier responsable</option><option value="me"<?= selected('me', $filters['assignee'] ?? '') ?>>Yo</option><option value="none"<?= selected('none', $filters['assignee'] ?? '') ?>>Sin responsable</option>
+    <?php foreach ($people ?? [] as $m): ?><option value="<?= (int)$m['id'] ?>"<?= selected($m['id'], $filters['assignee'] ?? '') ?>><?= e($m['name']) ?></option><?php endforeach; ?>
+  </select>
+  <label class="sr-only" for="tk-d">Fecha</label>
+  <select class="select<?= !empty($filters['due']) ? ' filter-active' : '' ?>" id="tk-d" name="due" data-autosubmit>
+    <option value="">Cualquier fecha</option><?php foreach (['overdue' => 'Vencidas', 'week' => 'Próximos 7 días', 'none' => 'Sin fecha'] as $k => $v): ?><option value="<?= $k ?>"<?= selected($k, $filters['due'] ?? '') ?>><?= $v ?></option><?php endforeach; ?>
+  </select>
+  <details class="more-options inline">
+    <summary><?= icon('filter', 'sm') ?> Más</summary>
+    <div class="row wrap mt-sm">
+      <label class="field"><span>Prioridad</span><select class="select" name="priority_id"><option value="">Todas</option><?php foreach ($priorities ?? [] as $pr): ?><option value="<?= (int)$pr['id'] ?>"<?= selected($pr['id'], $filters['priority_id'] ?? '') ?>><?= e($pr['name']) ?></option><?php endforeach; ?></select></label>
+      <label class="check"><input type="checkbox" name="blocked" value="1"<?= ($filters['blocked'] ?? '') === '1' ? ' checked' : '' ?>> Solo bloqueadas</label>
+      <button class="btn btn--sm" type="submit">Aplicar</button>
+    </div>
+  </details>
+  <span class="grow"></span>
+  <label class="sr-only" for="tk-g">Agrupar por</label>
+  <select class="select" id="tk-g" name="group" data-autosubmit title="Agrupar por"><?php foreach (CalendarController::GROUPS as $k => $v): ?><option value="<?= $k ?>"<?= selected($k, $group) ?>><?= $k === 'none' ? $v : 'Por ' . mb_strtolower($v) ?></option><?php endforeach; ?></select>
+  <span class="segmented sm" role="group" aria-label="Vista">
+    <?php foreach (CalendarController::VIEWS as $k => $v): ?><a href="<?= e(url('/tasks', ['tab' => 'team', 'view' => $k, 'group' => $group] + array_diff_key($keep, ['view' => 1, 'group' => 1]))) ?>"<?= $view === $k ? ' aria-current="page"' : '' ?> title="<?= e($v) ?>" data-task-view="<?= $k ?>"><?= icon($k === 'table' ? 'table' : ($k === 'list' ? 'list' : 'board'), 'sm') ?><span class="hide-sm"> <?= e($v) ?></span></a><?php endforeach; ?>
+  </span>
+  <?php if ($nFilters): ?><a class="btn btn--ghost btn--sm" href="<?= e(url('/tasks', ['tab' => 'team'])) ?>">Quitar filtros</a><?php endif; ?>
 </form>
-<div class="card" id="ptasks-region" data-region>
+<div class="card" id="ptasks-region" data-region data-view="<?= e($view) ?>">
   <?php if ($tasks): ?>
+  <?php if ($view === 'board'): ?>
+    <?php // board: one column per state category; inside, the same grouping as headings
+      $cols = ['todo' => 'Por hacer', 'in_progress' => 'En curso', 'blocked' => 'Bloqueadas'];
+      $byCol = ['todo' => [], 'in_progress' => [], 'blocked' => []];
+      foreach ($tasks as $t) $byCol[!empty($t['is_blocked']) ? 'blocked' : ($t['status_category'] === 'in_progress' ? 'in_progress' : 'todo')][] = $t;
+    ?>
+    <div class="task-board">
+      <?php foreach ($cols as $ck => $cl): ?>
+        <section class="task-board-col" aria-label="<?= e($cl) ?>"><h3><?= e($cl) ?> <span class="count"><?= count($byCol[$ck]) ?></span></h3>
+          <?php foreach (CalendarController::groupTasks($byCol[$ck], $group) as $gl => $gt): ?>
+            <?php if ($gl !== ''): ?><div class="task-board-group small muted"><?= e($gl) ?></div><?php endif; ?>
+            <?php foreach ($gt as $t): ?>
+              <button class="task-board-card" type="button" data-open-task="<?= e($t['task_key']) ?>">
+                <span class="key"><?= e($t['task_key']) ?></span> <span class="t"><?= e($t['title']) ?></span>
+                <span class="small muted row wrap"><?= $t['assignee_name'] ? e($t['assignee_name']) : 'Sin responsable' ?><?php if ($t['due_date']): ?> · <span class="<?= due_state($t['due_date'], false) ?>"><?= e(fmt_date($t['due_date'])) ?></span><?php endif; ?></span>
+              </button>
+            <?php endforeach; ?>
+          <?php endforeach; ?>
+          <?php if (!$byCol[$ck]): ?><p class="muted small">Nada aquí.</p><?php endif; ?>
+        </section>
+      <?php endforeach; ?>
+    </div>
+  <?php elseif ($view === 'list'): ?>
+    <?php foreach ($grouped as $gl => $gt): ?>
+      <?php if ($gl !== ''): ?><h3 class="task-group-head"><?= e($gl) ?> <span class="count"><?= count($gt) ?></span></h3><?php endif; ?>
+      <ul class="task-compact">
+        <?php foreach ($gt as $t): ?>
+          <li><button class="task-title" type="button" data-open-task="<?= e($t['task_key']) ?>"><span class="key"><?= e($t['task_key']) ?></span> <?= e($t['title']) ?></button>
+            <span class="small muted hide-sm"><?= e($t['project_name']) ?></span>
+            <span class="small"><?= $t['assignee_name'] ? e($t['assignee_name']) : '<span class="muted">—</span>' ?></span>
+            <span class="small <?= due_state($t['due_date'], false) ?>"><?= $t['due_date'] ? e(fmt_date($t['due_date'])) : '' ?></span></li>
+        <?php endforeach; ?>
+      </ul>
+    <?php endforeach; ?>
+  <?php else: ?>
   <div class="table-wrap">
     <table class="table mine-table">
       <thead><tr><th class="col-check"><span class="sr-only">Finalizar</span></th><th>Tarea</th><th class="hide-sm">Proyecto</th><th class="hide-sm">Responsable</th><th>Estado</th><th>Vencimiento</th></tr></thead>
+      <?php foreach ($grouped as $gl => $gt): ?>
       <tbody>
-      <?php foreach ($tasks as $t) echo $projRow($t, true); ?>
+      <?php if ($gl !== ''): ?><tr class="group-row"><th colspan="6" scope="colgroup"><?= e($gl) ?> <span class="count"><?= count($gt) ?></span></th></tr><?php endif; ?>
+      <?php foreach ($gt as $t) echo $projRow($t, true); ?>
       </tbody>
+      <?php endforeach; ?>
     </table>
   </div>
+  <?php endif; ?>
+  <?php if (!empty($hasMore)): ?><div class="card-foot"><a class="btn btn--sm" href="<?= e(url('/tasks', ['tab' => 'team', 'page' => $page + 1, 'view' => $view, 'group' => $group] + array_diff_key($keep, ['view' => 1, 'group' => 1]))) ?>">Mostrar más tareas</a> <span class="muted small">Se muestran <?= count($tasks) ?>. Usa los filtros para acotar.</span></div><?php endif; ?>
   <?php else: ?>
-    <div class="empty"><?= icon('check-circle') ?><h3>Nada por aquí</h3><p>No hay tareas abiertas en tus proyectos.</p></div>
+    <div class="empty"><?= icon('check-circle') ?><h3>Nada por aquí</h3><p><?= $nFilters ? 'Ninguna tarea abierta coincide con los filtros.' : 'No hay tareas abiertas en tus proyectos.' ?></p></div>
   <?php endif; ?>
 </div>
 <?php endif; ?>
