@@ -83,6 +83,7 @@ final class Tasks
         if (!empty($f['due_from'])) { $w[] = 'COALESCE(t.due_date, t.start_date) >= ?'; $params[] = $f['due_from']; }
         if (!empty($f['due_to'])) { $w[] = 'COALESCE(t.start_date, t.due_date) <= ?'; $params[] = $f['due_to']; }
         if (!empty($f['has_date'])) $w[] = '(t.due_date IS NOT NULL OR t.start_date IS NOT NULL)';
+        if (!empty($f['no_date'])) $w[] = 't.due_date IS NULL'; // 1.15
         if (!empty($f['completed_since'])) { $w[] = 't.completed_at >= ?'; $params[] = $f['completed_since']; }
         if (!empty($f['q'])) {
             $q = trim((string)$f['q']);
@@ -523,6 +524,9 @@ final class Tasks
             if ($s['category'] === 'done' && $t['status_category'] !== 'done' && $t['reporter_id'] && (int)$t['reporter_id'] !== (int)$t['assignee_id']) {
                 Notifications::send((int)$t['reporter_id'], 'status', "{$t['task_key']} finalizada: {$t['title']}", url('/t/' . $t['task_key']), $pid, (int)$t['id']);
             }
+            // 1.15: followers, and the automations that react to a change of state (blocker finished…)
+            Watchers::notify($t, "{$t['task_key']} pasó a «{$s['name']}»: {$t['title']}");
+            Automations::onEvent('task_status', ['task' => $t, 'status' => $s]);
         }
         if (array_key_exists('assignee_id', $data)) {
             $name = $data['assignee_id'] ? (Users::find((int)$data['assignee_id'])['name'] ?? '') : null;

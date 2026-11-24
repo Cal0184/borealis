@@ -336,7 +336,7 @@ check('Quien coordina asigna un trabajo rápido a otra persona y ella recibe el 
 $teaC->api('POST', '/api/tasks/' . (int)$qk['id'] . '/time', ['hours' => '1.5', 'work_date' => $day(0)]);
 check('En un trabajo rápido se registran horas', $teaC->status === 200 && $cnt('SELECT SUM(minutes) FROM time_entries WHERE task_id = ? AND deleted_at IS NULL', [(int)$qk['id']]) === 90, snippet($teaC));
 $admin->get('/projects');
-$listed = str_contains($admin->body, QuickName14());
+$listed = str_contains(substr($admin->body, (int)strpos($admin->body, 'id="page"')), QuickName14()); // 1.15: only the page, not the sidebar link
 $teaC->get('/quick');
 check('El espacio de trabajos rápidos no aparece entre los proyectos, pero tiene su propia página semanal', !$listed && $teaC->status === 200 && str_contains($teaC->body, 'Llamar al proveedor') && str_contains($teaC->body, 'Urgencia del cliente') && str_contains($teaC->body, 'data-quick-form'), snippet($teaC));
 $teaC->get('/');

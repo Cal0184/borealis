@@ -1,6 +1,6 @@
 // 1.6 general calendar: show/hide calendars and layers, create by clicking a day or an hour,
 // open an event to see or edit it, manage calendars, and the optional Google sync.
-import { api, toast, refresh, openDialog, confirmAction, clearDirty, onInit } from './core.js?v=1.14.0';
+import { api, toast, refresh, openDialog, confirmAction, clearDirty, onInit } from './core.js?v=1.15.1';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, '0');

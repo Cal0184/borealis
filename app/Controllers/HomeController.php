@@ -102,7 +102,7 @@ final class HomeController
         $cat = isset(Notifications::CATEGORIES[(string)$r->q('cat')]) ? (string)$r->q('cat') : null;
         \Borealis\Services\Events::generateReminders(); // 1.6: event reminders are due now, not in two minutes
         Notifications::generateDueReminders(); // 1.8: due, overdue and sprint notices too
-        return View::page('notifications', ['title' => 'Notificaciones', 'nav' => 'notifications', 'items' => Notifications::list(100, $unread, $cat), 'unreadOnly' => $unread, 'cat' => $cat]);
+        return View::page('notifications', ['title' => 'Bandeja de entrada', 'nav' => 'notifications', 'items' => Notifications::list(100, $unread, $cat), 'unreadOnly' => $unread, 'cat' => $cat]);
     }
 
     public function notificationsMenu(Request $r): Response

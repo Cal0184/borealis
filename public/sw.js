@@ -2,7 +2,7 @@
 // It does NOT cache pages, data or files of Borealis: after an update the browser always gets the new
 // version, and nothing private (projects, sessions, people) is ever stored on the device. The only
 // thing kept is the static «Sin conexión» page, shown when a page cannot be loaded at all.
-const VERSION = '1.14.0';
+const VERSION = '1.15.1';
 const scope = self.registration.scope; // e.g. https://example.org/borealis/
 const OFFLINE = 'borealis-offline-' + VERSION;
 
@@ -42,15 +42,36 @@ self.addEventListener('push', (event) => {
         data: { url: n.url || new URL('notifications', scope).href, v: VERSION },
       });
     }
+    // 1.15: open pages update their bell at once (notify-live.js), whatever they are showing
+    for (const w of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) w.postMessage({ type: 'borealis-push' });
   })());
 });
+
+// 1.15: does this window have unsaved changes? Asked before following a notice; a page that does not
+// answer in time (frozen by a dialog, or an old version) is treated as «yes», so nothing is lost.
+function hasUnsaved(w) {
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => resolve(true), 700);
+    ch.port1.onmessage = (e) => { clearTimeout(t); resolve(!!e.data?.dirty); };
+    try { w.postMessage({ type: 'borealis-dirty?' }, [ch.port2]); } catch { clearTimeout(t); resolve(true); }
+  });
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = new URL(event.notification.data?.url || '', scope).href;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) if (w.url.startsWith(scope) && 'focus' in w) { await w.navigate(url).catch(() => {}); return w.focus(); }
+    // a window of Borealis without unsaved changes goes to the notice; one with unsaved changes stays
+    // as it is and the notice opens in a new window (before 1.15 it navigated away from the form)
+    for (const w of wins) {
+      if (!w.url.startsWith(scope) || !('focus' in w)) continue;
+      if (await hasUnsaved(w)) break;
+      const moved = await w.navigate(url).catch(() => null);
+      if (moved) return moved.focus();
+      break;
+    }
     return self.clients.openWindow(url);
   })());
 });

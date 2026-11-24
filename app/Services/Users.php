@@ -80,7 +80,13 @@ final class Users
     {
         $v = Validator::check($input, ['motion' => 'sometimes,in:full|reduced|off', 'density' => 'sometimes,in:comfortable|compact',
             'ambient' => 'sometimes,in:' . implode('|', array_keys(self::AMBIENTS)), 'tour' => 'sometimes,in:done|skipped|again',
-            'tour_step' => 'sometimes,nullable,int']);
+            'tour_step' => 'sometimes,nullable,int',
+            // 1.15: sidebar and task list preferences
+            'nav_compact' => 'sometimes,bool', 'task_view' => 'sometimes,in:list|table|board', 'task_group' => 'sometimes,in:none|project|assignee|status|due']);
+        if (array_key_exists('nav_closed', $input)) {
+            $v['nav_closed'] = array_values(array_intersect(['mine', 'org', 'watch', 'admin'], array_map('strval', (array)$input['nav_closed'])));
+        }
+        if (array_key_exists('nav_compact', $v)) $v['nav_compact'] = (bool)$v['nav_compact'];
         // 1.6: the step the multi-page tutorial was on, so it resumes after moving to another page or reloading
         if (array_key_exists('tour_step', $v)) $v['tour_step'] = $v['tour_step'] === null || $v['tour_step'] === '' ? null : max(0, min(99, (int)$v['tour_step']));
         if (($v['tour'] ?? null) === 'again') $v['tour'] = null; // «Ver el tutorial otra vez»: it starts on the next page
@@ -191,7 +197,11 @@ final class Users
         $ok = $u && password_verify($password, $u['password_hash']) && (int)$u['is_active'] === 1 && (int)($u['is_ghost'] ?? 0) === 0;
         if (!$u) password_verify($password, self::dummyHash()); // equalize timing with the real algorithm
         $db->insert('login_attempts', ['email' => $email, 'ip' => $ip, 'success' => $ok ? 1 : 0, 'created_at' => now()]);
-        if (!$ok) throw HttpException::invalid(['email' => 'Correo o contraseña incorrectos.'], 'Correo o contraseña incorrectos.');
+        if (!$ok) {
+            // 1.15: a refused sign-in of an existing account goes to its Master Log (unknown addresses do not)
+            if ($u) Activity::security('login_failed', (int)$u['id'], 'Intento de inicio de sesión rechazado', $ip, 'denied');
+            throw HttpException::invalid(['email' => 'Correo o contraseña incorrectos.'], 'Correo o contraseña incorrectos.');
+        }
         if (password_needs_rehash($u['password_hash'], defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT)) {
             $u['password_hash'] = Auth::hash($password);
             $db->update('users', ['password_hash' => $u['password_hash']], 'id = ?', [$u['id']]);

@@ -1,36 +1,61 @@
 <?php use Borealis\Services\Users; $prefs = $me['prefs']; ?>
 <?php $hasPhoto = !empty($me['avatar_photo']); ?>
-<div class="page-head"><div class="row" style="gap:14px"><?= avatar($me, 'lg') ?><div><h1>Mi perfil</h1><p class="sub"><?= e($membership['role_name']) ?> en <?= e($membership['name']) ?></p></div></div></div>
-<div class="grid grid-2">
-  <section class="card"><div class="card-head"><h2><?= icon('user') ?> Datos personales</h2></div><div class="card-body">
+<?php $myWeekly = \Borealis\Core\Database::get()->value('SELECT weekly_hours FROM workspace_members WHERE workspace_id = ? AND user_id = ?', [\Borealis\Security\Policy::wsId(), $me['id']]); ?>
+<?php // 1.15 · profile as a settings page: a summary header, a section index and one column of sections ?>
+<section class="profile-hero">
+  <div class="profile-hero-photo"><?= avatar($me, 'xl') ?></div>
+  <div class="profile-hero-text">
+    <h1><?= e($me['name']) ?></h1>
+    <p class="sub"><?= $me['title'] ? e($me['title']) . ' · ' : '' ?><?= e($membership['role_name']) ?> en <?= e($membership['name']) ?></p>
+    <div class="profile-hero-meta">
+      <span><?= icon('mail', 'sm') ?> <?= e($me['email']) ?></span>
+      <span class="mention">@<?= e($me['handle']) ?></span>
+      <?php if ($myWeekly !== null): ?><span><?= icon('clock', 'sm') ?> <?= e(rtrim(rtrim((string)$myWeekly, '0'), '.')) ?> h por semana</span><?php endif; ?>
+    </div>
+  </div>
+  <a class="btn btn--sm profile-hero-link" href="<?= e(url('/people/' . $me['id'])) ?>"><?= icon('eye', 'sm') ?> Ver mi ficha</a>
+</section>
+
+<div class="settings-layout profile-layout">
+  <nav class="side-nav profile-nav" data-profile-nav aria-label="Secciones del perfil">
+    <a href="#datos"><?= icon('user', 'sm') ?> Datos personales</a>
+    <a href="#apariencia"><?= icon('eye', 'sm') ?> Apariencia</a>
+    <a href="#notificaciones"><?= icon('bell', 'sm') ?> Notificaciones</a>
+    <a href="#conexiones"><?= icon('link', 'sm') ?> Conexiones</a>
+    <a href="#seguridad"><?= icon('lock', 'sm') ?> Seguridad</a>
+    <a href="#ayuda"><?= icon('play', 'sm') ?> Ayuda</a>
+  </nav>
+  <div class="profile-sections">
+  <section class="card" id="datos"><div class="card-head"><h2><?= icon('user') ?> Datos personales</h2></div><div class="card-body">
     <div class="photo-box" id="foto">
-      <?= avatar($me, 'xl') ?>
-      <div>
+      <?= avatar($me, 'lg') ?>
+      <div class="photo-box-text">
         <span class="label">Fotografía de perfil</span>
+        <span class="hint">JPG, PNG, WebP o GIF de hasta 8 MB. Antes de guardarla eliges el recorte.<?= $hasPhoto ? '' : ' Mientras no subas una, se muestran tus iniciales.' ?></span>
         <?php if (!\Borealis\Services\Avatars::supported()): ?><p class="notice small">Este servidor no tiene la extensión GD de PHP con WebP, necesaria para las fotografías. Pide a la administración que la active.</p><?php endif; ?>
-        <div class="row wrap"<?= \Borealis\Services\Avatars::supported() ? '' : ' hidden' ?>>
-          <label class="btn btn--sm" for="photo-file"><?= icon('upload', 'sm') ?> <?= $hasPhoto ? 'Cambiar fotografía' : 'Subir fotografía' ?></label>
-          <input class="sr-only" type="file" id="photo-file" accept="image/jpeg,image/png,image/webp,image/gif" data-photo-input>
-          <?php if ($hasPhoto): ?><button type="button" class="btn btn--ghost btn--sm" data-call="/api/profile/photo" data-method="DELETE" data-confirm="¿Eliminar tu fotografía? Volverás a ver tus iniciales." data-confirm-label="Eliminar"><?= icon('trash', 'sm') ?> Eliminar</button><?php endif; ?>
-        </div>
-        <span class="hint">JPG, PNG, WebP o GIF de hasta 8 MB. Antes de guardarla eliges el recorte. Se ve en el menú, en las tareas y en las listas de responsables. <?= $hasPhoto ? '' : 'Mientras no subas una, se muestran tus iniciales.' ?></span>
+      </div>
+      <div class="row wrap photo-box-actions"<?= \Borealis\Services\Avatars::supported() ? '' : ' hidden' ?>>
+        <label class="btn btn--sm" for="photo-file"><?= icon('upload', 'sm') ?> <?= $hasPhoto ? 'Cambiar fotografía' : 'Subir fotografía' ?></label>
+        <input class="sr-only" type="file" id="photo-file" accept="image/jpeg,image/png,image/webp,image/gif" data-photo-input>
+        <?php if ($hasPhoto): ?><button type="button" class="btn btn--ghost btn--sm" data-call="/api/profile/photo" data-method="DELETE" data-confirm="¿Eliminar tu fotografía? Volverás a ver tus iniciales." data-confirm-label="Eliminar"><?= icon('trash', 'sm') ?> Eliminar</button><?php endif; ?>
       </div>
     </div>
     <form data-api="/api/profile" data-method="PATCH">
       <div class="form-error" data-form-error></div>
-      <div class="field"><label for="pf-n">Nombre</label><input class="input" id="pf-n" name="name" value="<?= e($me['name']) ?>" required maxlength="120"><span class="error" data-error-for="name"></span></div>
-      <div class="field"><label for="pf-e">Correo</label><input class="input" type="email" id="pf-e" name="email" value="<?= e($me['email']) ?>" required><span class="error" data-error-for="email"></span></div>
-      <div class="field"><label for="pf-t">Cargo o función</label><input class="input" id="pf-t" name="title" value="<?= e($me['title']) ?>" maxlength="120" placeholder="p. ej. Coordinación de diseño"></div>
-      <div class="field"><span class="label">Color de las iniciales <span class="muted small">(cuando no hay fotografía)</span></span><div class="row wrap">
-        <?php foreach (Users::COLORS as $c): ?><label class="check" title="<?= e($c) ?>"><input type="radio" name="avatar_color" value="<?= e($c) ?>"<?= checked($me['avatar_color'] === $c) ?>><span class="avatar sm" style="--avatar:<?= e($c) ?>"><?= e(initials($me['name'])) ?></span></label><?php endforeach; ?>
-      </div></div>
-      <?php $myWeekly = \Borealis\Core\Database::get()->value('SELECT weekly_hours FROM workspace_members WHERE workspace_id = ? AND user_id = ?', [\Borealis\Security\Policy::wsId(), $me['id']]); ?>
-      <div class="field"><label for="pf-h">Horas semanales disponibles en este espacio</label><input class="input hours-input" type="number" id="pf-h" name="weekly_hours" min="0" max="168" step="0.5" value="<?= $myWeekly !== null ? e(rtrim(rtrim((string)$myWeekly, '0'), '.')) : '' ?>" placeholder="p. ej. 40"><span class="hint">Se usa para calcular la capacidad de los sprints y tu resumen semanal.</span><span class="error" data-error-for="weekly_hours"></span></div>
-      <p class="muted small">Te mencionan escribiendo <span class="mention">@<?= e($me['handle']) ?></span></p>
-      <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar</button></div>
+      <div class="form-row">
+        <div class="field"><label for="pf-n">Nombre</label><input class="input" id="pf-n" name="name" value="<?= e($me['name']) ?>" required maxlength="120"><span class="error" data-error-for="name"></span></div>
+        <div class="field"><label for="pf-e">Correo</label><input class="input" type="email" id="pf-e" name="email" value="<?= e($me['email']) ?>" required><span class="error" data-error-for="email"></span></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label for="pf-t">Cargo o función</label><input class="input" id="pf-t" name="title" value="<?= e($me['title']) ?>" maxlength="120" placeholder="p. ej. Coordinación de diseño"></div>
+        <div class="field"><label for="pf-h">Horas semanales en este espacio</label><input class="input" type="number" id="pf-h" name="weekly_hours" min="0" max="168" step="0.5" value="<?= $myWeekly !== null ? e(rtrim(rtrim((string)$myWeekly, '0'), '.')) : '' ?>" placeholder="p. ej. 40"><span class="hint">Para la capacidad de los sprints y tu resumen semanal.</span><span class="error" data-error-for="weekly_hours"></span></div>
+      </div>
+      <fieldset class="field"><legend class="label">Color de las iniciales <span class="muted small">(cuando no hay fotografía)</span></legend><div class="swatch-row">
+        <?php foreach (Users::COLORS as $c): ?><label class="swatch" title="<?= e($c) ?>"><input class="sr-only" type="radio" name="avatar_color" value="<?= e($c) ?>"<?= checked($me['avatar_color'] === $c) ?>><span class="avatar sm" style="--avatar:<?= e($c) ?>"><?= e(initials($me['name'])) ?></span></label><?php endforeach; ?>
+      </div></fieldset>
+      <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar</button><span class="muted small">Te mencionan escribiendo <span class="mention">@<?= e($me['handle']) ?></span></span></div>
     </form>
   </div></section>
-  <div class="stack">
     <section class="card" id="apariencia"><div class="card-head"><h2><?= icon('eye') ?> Apariencia</h2><span class="save-state" data-save-state aria-live="polite"></span></div><div class="card-body">
       <p class="muted small" style="margin-top:0">Elige el tema que verás tú: cambia el fondo, la barra lateral y el símbolo de Borealis. Las demás personas no ven ningún cambio.</p>
       <div class="ambient-grid" role="group" aria-label="Tema de Borealis">
@@ -42,18 +67,75 @@
           </button>
         <?php endforeach; ?>
       </div>
+      <form class="appearance-motion" data-api="/api/profile/prefs" data-method="PATCH" data-on-success="reload">
+        <div class="field"><label for="pf-m">Animaciones</label>
+          <div class="row wrap"><select class="select" id="pf-m" name="motion" style="max-width:280px"><option value="full"<?= selected('full', $prefs['motion'] ?? 'full') ?>>Completas</option><option value="reduced"<?= selected('reduced', $prefs['motion'] ?? '') ?>>Reducidas (sin celebraciones)</option><option value="off"<?= selected('off', $prefs['motion'] ?? '') ?>>Desactivadas</option></select>
+          <button class="btn" type="submit">Guardar</button></div>
+          <span class="hint">Borealis también respeta la preferencia de movimiento reducido de tu sistema.</span></div>
+      </form>
     </div></section>
-    <section class="card" id="ayuda"><div class="card-head"><h2><?= icon('circle') ?> Ayuda</h2></div><div class="card-body">
-      <p style="margin-top:0">El recorrido guiado pasa por Inicio, Proyectos, Tareas, Responsables, Sprints, Calendarios y Configuración, señalando los controles reales de cada página.</p>
-      <button class="btn" type="button" data-tour-start><?= icon('play', 'sm') ?> Ver el tutorial otra vez</button>
+    <?php $np = \Borealis\Services\Notifications::prefs((int)$me['id']); $devices = \Borealis\Services\Push::devices((int)$me['id']); ?>
+    <section class="card" id="notificaciones"><div class="card-head"><h2><?= icon('bell') ?> Notificaciones</h2></div><div class="card-body">
+      <form data-api="/api/profile/notifications" data-method="PATCH" data-notify-form>
+        <fieldset class="field"><legend class="label">Qué quieres recibir en Borealis</legend><div class="notif-cat-grid">
+          <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl, $desc]): ?>
+            <label class="check notif-cat"><input type="checkbox" name="in_app[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['off'], true)) ?>> <span><strong><?= e($lbl) ?></strong><br><span class="small muted"><?= e($desc) ?></span></span></label>
+          <?php endforeach; ?>
+        </div></fieldset>
+        <fieldset class="field"><legend class="label">Avisar antes de la entrega</legend>
+          <div class="row wrap gx-before"><?php foreach (\Borealis\Services\Notifications::BEFORE as $m => $lbl): ?>
+            <label class="check"><input type="checkbox" name="before[]" value="<?= $m ?>"<?= checked(in_array($m, $np['before'], true)) ?>> <?= e($lbl) ?></label>
+          <?php endforeach; ?></div>
+          <input type="hidden" name="before[]" value="">
+          <span class="hint">Si la tarea tiene hora de entrega, a esa distancia exacta; si solo tiene fecha, el día que corresponde («vence mañana», «vence hoy»). Si ya pasaron varios momentos, llega solo el más cercano. Las tareas completadas nunca avisan.</span></fieldset>
+        <div class="grid grid-2 nf-grid">
+          <div class="field"><label for="nf-tz">Tu zona horaria</label>
+            <select class="select" id="nf-tz" name="timezone"><?php $myTz = $np['timezone'] ?? \Borealis\Services\UserTime::installZone(); foreach (\Borealis\Services\UserTime::choices() as $z): ?><option value="<?= e($z) ?>"<?= selected($z, $myTz) ?>><?= e(str_replace('_', ' ', $z)) ?><?= $z === \Borealis\Services\UserTime::installZone() ? ' (la de Borealis)' : '' ?></option><?php endforeach; ?></select>
+            <span class="hint">Para tus recordatorios, el horario de silencio, los correos y tu Google Calendar.</span></div>
+          <fieldset class="field"><legend class="label">Horario de silencio</legend>
+            <label class="check"><input type="checkbox" name="quiet_on" value="1"<?= checked($np['quiet']['on']) ?>> No enviar al móvil ni por correo</label>
+            <div class="row"><label class="sr-only" for="nf-qf">Desde</label><input class="input sm" type="time" id="nf-qf" name="quiet_from" value="<?= e($np['quiet']['from']) ?>" style="max-width:120px"> <span class="muted small">a</span>
+              <label class="sr-only" for="nf-qt">Hasta</label><input class="input sm" type="time" id="nf-qt" name="quiet_to" value="<?= e($np['quiet']['to']) ?>" style="max-width:120px"></div>
+            <span class="hint">Los avisos se guardan en la campana y llegan juntos al terminar.</span></fieldset>
+        </div>
+
+        <?php $mailOk = \Borealis\Services\Mailer::configured(); $myMail = \Borealis\Services\UserTime::emailOf((int)$me['id']); ?>
+        <div class="push-box" data-mail-box>
+          <h3 class="small-title"><?= icon('mail', 'sm') ?> Por correo</h3>
+          <label class="check"><input type="checkbox" name="email" value="1"<?= checked($np['email']) ?>> <span>Enviarme los avisos importantes a <strong style="overflow-wrap:anywhere"><?= e((string)($me['email'] ?? '')) ?></strong></span></label>
+          <p class="small muted" data-mail-status><?= !$mailOk ? 'Esta instalación todavía no puede enviar correos: la administración debe configurarlo. Mientras tanto no se envía ninguno.' : (!$myMail ? 'Tu dirección de correo no es válida; cámbiala en Datos personales para recibirlos.' : 'Si hay varios avisos juntos llegan en un solo correo. No se envía lo que ya leíste en Borealis.') ?></p>
+          <details class="more-options"><summary><?= icon('settings', 'sm') ?> Qué avisos llegan por correo</summary>
+            <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
+              <label class="check"><input type="checkbox" name="email_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['email_off'], true)) ?>> <?= e($lbl) ?></label>
+            <?php endforeach; ?>
+            <input type="hidden" name="email_cats[]" value="">
+          </details>
+        </div>
+
+        <div class="push-box" data-push-box data-has-devices="<?= $devices ? '1' : '0' ?>">
+          <h3 class="small-title"><?= icon('bell', 'sm') ?> En el móvil y en este equipo</h3>
+          <p class="small" data-push-status>Comprobando si este navegador admite notificaciones…</p>
+          <p class="small muted" data-push-ios hidden>En iPhone o iPad: abre Borealis en Safari, pulsa Compartir › «Añadir a pantalla de inicio», ábrelo desde ese icono y vuelve aquí para activarlas (iOS 16.4 o posterior).</p>
+          <div class="row wrap">
+            <button type="button" class="btn btn--primary btn--sm" data-push-on hidden><?= icon('bell', 'sm') ?> Activar en este dispositivo</button>
+            <button type="button" class="btn btn--sm" data-push-test hidden><?= icon('play', 'sm') ?> Enviar una prueba</button>
+            <button type="button" class="btn btn--ghost btn--sm" data-push-off hidden>Desactivar en este dispositivo</button>
+          </div>
+          <input type="hidden" name="push" value="<?= $np['push'] ? '1' : '0' ?>" data-push-flag>
+          <details class="more-options" data-push-cats<?= $np['push'] ? '' : ' hidden' ?>><summary><?= icon('settings', 'sm') ?> Qué avisos llegan al móvil</summary>
+            <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
+              <label class="check"><input type="checkbox" name="push_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['push_off'], true)) ?>> <?= e($lbl) ?></label>
+            <?php endforeach; ?>
+          </details>
+          <?php $job = \Borealis\Services\Scheduler::status(); if (in_array($job['state'], ['never', 'stale'], true)): ?>
+            <p class="small notice" data-push-job="<?= e($job['state']) ?>"><?= icon('alert', 'sm') ?> El servidor de Borealis aún no envía avisos por su cuenta: hasta que la administración active la tarea programada, los recordatorios llegan cuando alguien usa Borealis.</p>
+          <?php endif; ?>
+          <?php if ($devices): ?><p class="small muted">Dispositivos con avisos: <?= count($devices) ?><?= $devices[0]['last_error'] ? ' · último problema: ' . e($devices[0]['last_error']) : '' ?></p><?php endif; ?>
+        </div>
+        <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar notificaciones</button></div>
+      </form>
     </div></section>
-    <section class="card pwa-box" id="aplicacion" data-pwa-box><div class="card-head"><h2><?= icon('download') ?> Borealis como aplicación</h2></div><div class="card-body">
-      <p style="margin-top:0" data-pwa-status>Instala Borealis en tu computador, tablet o celular: se abre en su propia ventana, con su icono, y recibe avisos como una aplicación.</p>
-      <button class="btn btn--primary" type="button" data-pwa-install hidden><?= icon('download', 'sm') ?> Instalar Borealis</button>
-      <p class="small muted" data-pwa-ios hidden>En iPhone o iPad: abre Borealis en Safari, pulsa Compartir y elige «Añadir a pantalla de inicio».</p>
-      <p class="small muted" data-pwa-manual hidden>En este navegador: menú del navegador › «Instalar Borealis» o «Añadir a la pantalla de inicio». Necesita una dirección https.</p>
-      <p class="small muted" data-pwa-done hidden>Ya estás usando Borealis instalado.</p>
-    </div></section>
+    <h2 class="profile-group-title" id="conexiones">Conexiones</h2>
     <?php $g = \Borealis\Services\Google::account(); $gmsg = \Borealis\Core\Session::flash('google_msg');
       $gx = $g ? \Borealis\Services\GoogleExport::status((int)$me['id']) : ['state' => 'disconnected']; $gxo = $gx['options'] ?? \Borealis\Services\GoogleExport::DEFAULTS;
       $gState = !$g ? ['Desconectado', ''] : ($g['status'] === 'revoked' ? ['Error de autorización', 'danger'] : (($gx['state'] ?? '') === 'pending' ? ['Sincronizando', 'warn'] : (($gx['state'] ?? '') === 'error' || $g['status'] === 'error' ? ['Con errores', 'warn'] : ['Conectado', 'success']))); ?>
@@ -135,76 +217,14 @@
         </div>
       <?php endif; ?>
     </div></section>
-    <?php $np = \Borealis\Services\Notifications::prefs((int)$me['id']); $devices = \Borealis\Services\Push::devices((int)$me['id']); ?>
-    <section class="card" id="notificaciones"><div class="card-head"><h2><?= icon('bell') ?> Notificaciones</h2></div><div class="card-body">
-      <form data-api="/api/profile/notifications" data-method="PATCH" data-notify-form>
-        <fieldset class="field"><legend class="label">Qué quieres recibir en Borealis</legend>
-          <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl, $desc]): ?>
-            <label class="check notif-cat"><input type="checkbox" name="in_app[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['off'], true)) ?>> <span><strong><?= e($lbl) ?></strong><br><span class="small muted"><?= e($desc) ?></span></span></label>
-          <?php endforeach; ?>
-        </fieldset>
-        <fieldset class="field"><legend class="label">Avisar antes de la entrega</legend>
-          <div class="row wrap gx-before"><?php foreach (\Borealis\Services\Notifications::BEFORE as $m => $lbl): ?>
-            <label class="check"><input type="checkbox" name="before[]" value="<?= $m ?>"<?= checked(in_array($m, $np['before'], true)) ?>> <?= e($lbl) ?></label>
-          <?php endforeach; ?></div>
-          <input type="hidden" name="before[]" value="">
-          <span class="hint">Si la tarea tiene hora de entrega, a esa distancia exacta; si solo tiene fecha, el día que corresponde («vence mañana», «vence hoy»). Si ya pasaron varios momentos, llega solo el más cercano. Las tareas completadas nunca avisan.</span></fieldset>
-        <div class="grid grid-2 nf-grid">
-          <div class="field"><label for="nf-tz">Tu zona horaria</label>
-            <select class="select" id="nf-tz" name="timezone"><?php $myTz = $np['timezone'] ?? \Borealis\Services\UserTime::installZone(); foreach (\Borealis\Services\UserTime::choices() as $z): ?><option value="<?= e($z) ?>"<?= selected($z, $myTz) ?>><?= e(str_replace('_', ' ', $z)) ?><?= $z === \Borealis\Services\UserTime::installZone() ? ' (la de Borealis)' : '' ?></option><?php endforeach; ?></select>
-            <span class="hint">Para tus recordatorios, el horario de silencio, los correos y tu Google Calendar.</span></div>
-          <fieldset class="field"><legend class="label">Horario de silencio</legend>
-            <label class="check"><input type="checkbox" name="quiet_on" value="1"<?= checked($np['quiet']['on']) ?>> No enviar al móvil ni por correo</label>
-            <div class="row"><label class="sr-only" for="nf-qf">Desde</label><input class="input sm" type="time" id="nf-qf" name="quiet_from" value="<?= e($np['quiet']['from']) ?>" style="max-width:120px"> <span class="muted small">a</span>
-              <label class="sr-only" for="nf-qt">Hasta</label><input class="input sm" type="time" id="nf-qt" name="quiet_to" value="<?= e($np['quiet']['to']) ?>" style="max-width:120px"></div>
-            <span class="hint">Los avisos se guardan en la campana y llegan juntos al terminar.</span></fieldset>
-        </div>
-
-        <?php $mailOk = \Borealis\Services\Mailer::configured(); $myMail = \Borealis\Services\UserTime::emailOf((int)$me['id']); ?>
-        <div class="push-box" data-mail-box>
-          <h3 class="small-title"><?= icon('mail', 'sm') ?> Por correo</h3>
-          <label class="check"><input type="checkbox" name="email" value="1"<?= checked($np['email']) ?>> <span>Enviarme los avisos importantes a <strong style="overflow-wrap:anywhere"><?= e((string)($me['email'] ?? '')) ?></strong></span></label>
-          <p class="small muted" data-mail-status><?= !$mailOk ? 'Esta instalación todavía no puede enviar correos: la administración debe configurarlo. Mientras tanto no se envía ninguno.' : (!$myMail ? 'Tu dirección de correo no es válida; cámbiala en Datos personales para recibirlos.' : 'Si hay varios avisos juntos llegan en un solo correo. No se envía lo que ya leíste en Borealis.') ?></p>
-          <details class="more-options"><summary><?= icon('settings', 'sm') ?> Qué avisos llegan por correo</summary>
-            <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
-              <label class="check"><input type="checkbox" name="email_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['email_off'], true)) ?>> <?= e($lbl) ?></label>
-            <?php endforeach; ?>
-            <input type="hidden" name="email_cats[]" value="">
-          </details>
-        </div>
-
-        <div class="push-box" data-push-box data-has-devices="<?= $devices ? '1' : '0' ?>">
-          <h3 class="small-title"><?= icon('bell', 'sm') ?> En el móvil y en este equipo</h3>
-          <p class="small" data-push-status>Comprobando si este navegador admite notificaciones…</p>
-          <p class="small muted" data-push-ios hidden>En iPhone o iPad: abre Borealis en Safari, pulsa Compartir › «Añadir a pantalla de inicio», ábrelo desde ese icono y vuelve aquí para activarlas (iOS 16.4 o posterior).</p>
-          <div class="row wrap">
-            <button type="button" class="btn btn--primary btn--sm" data-push-on hidden><?= icon('bell', 'sm') ?> Activar en este dispositivo</button>
-            <button type="button" class="btn btn--sm" data-push-test hidden><?= icon('play', 'sm') ?> Enviar una prueba</button>
-            <button type="button" class="btn btn--ghost btn--sm" data-push-off hidden>Desactivar en este dispositivo</button>
-          </div>
-          <input type="hidden" name="push" value="<?= $np['push'] ? '1' : '0' ?>" data-push-flag>
-          <details class="more-options" data-push-cats<?= $np['push'] ? '' : ' hidden' ?>><summary><?= icon('settings', 'sm') ?> Qué avisos llegan al móvil</summary>
-            <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
-              <label class="check"><input type="checkbox" name="push_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['push_off'], true)) ?>> <?= e($lbl) ?></label>
-            <?php endforeach; ?>
-          </details>
-          <?php $job = \Borealis\Services\Scheduler::status(); if (in_array($job['state'], ['never', 'stale'], true)): ?>
-            <p class="small notice" data-push-job="<?= e($job['state']) ?>"><?= icon('alert', 'sm') ?> El servidor de Borealis aún no envía avisos por su cuenta: hasta que la administración active la tarea programada, los recordatorios llegan cuando alguien usa Borealis.</p>
-          <?php endif; ?>
-          <?php if ($devices): ?><p class="small muted">Dispositivos con avisos: <?= count($devices) ?><?= $devices[0]['last_error'] ? ' · último problema: ' . e($devices[0]['last_error']) : '' ?></p><?php endif; ?>
-        </div>
-        <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar notificaciones</button></div>
-      </form>
+    <section class="card pwa-box" id="aplicacion" data-pwa-box><div class="card-head"><h2><?= icon('download') ?> Borealis como aplicación</h2></div><div class="card-body">
+      <p style="margin-top:0" data-pwa-status>Instala Borealis en tu computador, tablet o celular: se abre en su propia ventana, con su icono, y recibe avisos como una aplicación.</p>
+      <button class="btn btn--primary" type="button" data-pwa-install hidden><?= icon('download', 'sm') ?> Instalar Borealis</button>
+      <p class="small muted" data-pwa-ios hidden>En iPhone o iPad: abre Borealis en Safari, pulsa Compartir y elige «Añadir a pantalla de inicio».</p>
+      <p class="small muted" data-pwa-manual hidden>En este navegador: menú del navegador › «Instalar Borealis» o «Añadir a la pantalla de inicio». Necesita una dirección https.</p>
+      <p class="small muted" data-pwa-done hidden>Ya estás usando Borealis instalado.</p>
     </div></section>
-    <section class="card"><div class="card-head"><h2><?= icon('settings') ?> Preferencias</h2></div><div class="card-body">
-      <form data-api="/api/profile/prefs" data-method="PATCH" data-on-success="reload">
-        <div class="field"><label for="pf-m">Animaciones</label>
-          <select class="select" id="pf-m" name="motion"><option value="full"<?= selected('full', $prefs['motion'] ?? 'full') ?>>Completas</option><option value="reduced"<?= selected('reduced', $prefs['motion'] ?? '') ?>>Reducidas (sin celebraciones)</option><option value="off"<?= selected('off', $prefs['motion'] ?? '') ?>>Desactivadas</option></select>
-          <span class="hint">Borealis también respeta la preferencia de movimiento reducido de tu sistema.</span></div>
-        <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar preferencias</button></div>
-      </form>
-    </div></section>
-    <section class="card"><div class="card-head"><h2><?= icon('lock') ?> Contraseña</h2></div><div class="card-body">
+    <section class="card" id="seguridad"><div class="card-head"><h2><?= icon('lock') ?> Contraseña y sesiones</h2></div><div class="card-body">
       <form data-api="/api/profile/password" data-reset>
         <div class="form-error" data-form-error></div>
         <div class="field"><label for="pw-c">Contraseña actual</label><input class="input" type="password" id="pw-c" name="current_password" required autocomplete="current-password"><span class="error" data-error-for="current_password"></span></div>
@@ -215,6 +235,10 @@
         <p class="muted small">Al cambiarla se cierran tus sesiones en otros dispositivos.</p>
         <div class="form-actions start"><button class="btn btn--primary" type="submit">Cambiar contraseña</button></div>
       </form>
+    </div></section>
+    <section class="card" id="ayuda"><div class="card-head"><h2><?= icon('circle') ?> Ayuda</h2></div><div class="card-body">
+      <p style="margin-top:0">El recorrido guiado pasa por Inicio, Proyectos, Tareas, Responsables, Sprints, Calendarios y Configuración, señalando los controles reales de cada página.</p>
+      <button class="btn" type="button" data-tour-start><?= icon('play', 'sm') ?> Ver el tutorial otra vez</button>
     </div></section>
   </div>
 </div>

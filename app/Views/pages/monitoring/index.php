@@ -14,7 +14,8 @@ $loadBadge = fn(string $k) => '<span class="badge ' . Monitoring::LOAD[$k][1] . 
 $who = $scope['admin'] ? 'todos los proyectos del espacio' : ($scope['managed'] ? 'tus proyectos y los que llevas' : 'los proyectos en los que participas');
 ?>
 <div class="page-head">
-  <div><h1>Monitoreo</h1><p class="sub">Cuándo la planificación deja de coincidir con la realidad, con el porqué de cada aviso. Ves <?= e($who) ?>.</p></div>
+  <div><h1>Monitoreo</h1><p class="sub">Cuándo la planificación deja de coincidir con la realidad, con el porqué de cada aviso. Ves <?= e($who) ?>.</p>
+    <?php if (!$scope['admin'] && !$scope['managed']): ?><p class="small muted" data-privacy-note><?= icon('eye', 'sm') ?> Aquí ves tu propio trabajo. Tus datos de carga y horas solo los ven, además de ti, quienes llevan tus proyectos y la administración del espacio. Borealis no mide tiempo en pantalla ni actividad fuera de las tareas.</p><?php endif; ?></div>
   <div class="page-actions">
     <button class="btn" type="button" data-call="/api/monitoring/scan" title="<?= $run ? 'Última revisión: ' . e(fmt_datetime($run['ran_at'])) : 'Aún no se ha revisado' ?>"><?= icon('repeat', 'sm') ?> Revisar ahora</button>
   </div>

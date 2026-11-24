@@ -1,7 +1,7 @@
 // Mobile and desktop notifications (1.8) with the browser's standard Web Push.
 // Registers the service worker (sw.js, needed also to install Borealis on the Home Screen),
 // asks for permission only when the person presses «Activar», and keeps the server informed.
-import { api, basePath, onInit, toast } from './core.js?v=1.14.0';
+import { api, basePath, onInit, toast } from './core.js?v=1.15.1';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

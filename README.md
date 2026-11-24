@@ -172,7 +172,7 @@ Cómo funciona:
   - Desde la 1.9 también envía los correos y pone al día Google Calendar.
   - Desde la 1.14, Administración › Notificaciones dice si funciona. Ahí también está la dirección `/cron/run?token=…`, para alojamientos que solo llaman a una URL.
   - Con PHP-FPM, una visita cualquiera también la ejecuta, como respaldo.
-  - Detalle en `docs/CONFIGURACION-1.14.md`.
+  - Detalle en `docs/CONFIGURACION-1.14.md`. Desde la 1.15, la tarea programada también aplica las automatizaciones por fecha.
 
 **Correo (1.9, opcional).** Sección `mail` de `config/config.php` con un buzón de tu dominio (SMTP 587/STARTTLS o 465/SSL), o `mail()` del servidor. Pasos para HestiaCP y prueba: `docs/CONFIGURACION-1.9.md` › Correo.
 - Si se borra `storage/vapid.json` o `storage/app.key`, los dispositivos tienen que volver a activar las notificaciones.
@@ -211,6 +211,21 @@ Lo que se probó sin servicios reales: las pruebas usan un servidor local que im
    - desde consola: `php bin/migrate.php` (también crea la copia; `--status` solo informa).
 
 Las migraciones nunca eliminan datos de usuario.
+
+### De 1.14.0 a 1.15.0
+
+1. Copia de seguridad.
+2. Sustituye los archivos conservando `config/config.php` y `storage/`.
+3. Aplica la migración `017_v115` (Administración › Datos › Actualizar base de datos, o `php bin/migrate.php`).
+   - Solo agrega: seis tablas, tres columnas y dos índices. No cambia ni borra datos y se puede repetir.
+   - El registro de la 1.14 sigue válido: «Comprobar integridad» da correcto después de actualizar.
+4. No hace falta configurar nada nuevo. La tarea programada de la 1.14 también aplica las automatizaciones por fecha.
+   - Opcional: conservación del registro (`'audit' => ['retention_months' => N]` y `bin/audit-archive.php`).
+   - Detalle en `docs/CONFIGURACION-1.15.md`.
+
+**Volver a 1.14.0:**
+- Restaura los archivos de 1.14.0. Las tablas y columnas nuevas no le molestan.
+- Lo registrado mientras tanto con un resultado (por ejemplo, un acceso rechazado) no verificará en la 1.14, porque esa versión no conoce la columna `result`. Al volver a la 1.15, vuelve a verificar.
 
 ### De 1.13.0 a 1.14.0
 

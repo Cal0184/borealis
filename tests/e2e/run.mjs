@@ -267,6 +267,7 @@ await attempt('Horas en el detalle de la tarea', async () => {
   await page.locator('.task-card', { hasText: 'Marcar el sendero' }).locator('.card-open').click();
   const drawer = page.locator('#drawer.open');
   await drawer.waitFor({ timeout: 5000 });
+  await drawer.locator('[data-td-tab="time"]').click(); // 1.15: hours live in the «Horas» tab of the activity
   await drawer.locator('#td-time', { hasText: '1 h 30 min' }).waitFor({ timeout: 5000 });
   check('El panel de la tarea muestra las horas del cierre', true);
   await drawer.locator('.time-form input[name=hours]').fill('45m');
@@ -1112,7 +1113,7 @@ await attempt('Crear cuenta con horas semanales y enlace correcto', async () => 
 await attempt('«Calendario» en el menú lateral', async () => {
   await page.goto(BASE + '/calendar');
   const item = page.locator('.sidebar a.nav-item[href$="/calendar"]');
-  check('Escritorio: «Calendario» con su icono, marcado al estar en la sección', (await item.getAttribute('aria-current')) === 'page' && (await item.locator('svg use').getAttribute('href')).includes('calendar') && (await item.textContent()).trim() === 'Calendario');
+  check('Escritorio: «Calendario» con su icono, marcado al estar en la sección', (await item.getAttribute('aria-current')) === 'page' && (await item.locator('svg use').getAttribute('href')).includes('calendar') && (await item.textContent()).trim() === 'Mi calendario'); // 1.15: «Mi espacio › Mi calendario»
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(BASE + '/');
   await page.locator('[data-sidebar-toggle], .sidebar-toggle, button[aria-controls="sidebar"]').first().click();
@@ -1279,7 +1280,7 @@ await attempt('Calendario personal y de equipo', async () => {
 await attempt('Notificaciones configurables', async () => {
   await page.goto(BASE + '/profile#notificaciones');
   const form = page.locator('[data-notify-form]');
-  check('Perfil › Notificaciones: categorías, anticipación y móvil', await form.isVisible() && await form.locator('input[name="in_app[]"]').count() === 11 && await page.locator('[data-push-box]').isVisible());
+  check('Perfil › Notificaciones: categorías, anticipación y móvil', await form.isVisible() && await form.locator('input[name="in_app[]"]').count() === 13 /* 1.15: + tareas que sigues, automatizaciones */ && await page.locator('[data-push-box]').isVisible());
   await form.locator('input[name="in_app[]"][value="capacity"]').uncheck();
   await form.locator('input[name="before[]"][value="2880"], input[name="before[]"][value="4320"]').first().check();
   const resp = page.waitForResponse((r) => r.url().includes('/api/profile/notifications'));
@@ -1292,7 +1293,7 @@ await attempt('Notificaciones configurables', async () => {
   await page.reload();
   check('Al volver, la elección sigue ahí', !(await form.locator('input[name="in_app[]"][value="capacity"]').isChecked()) && await form.locator('input[name="before[]"][value="4320"]').isChecked());
   await page.goto(BASE + '/notifications');
-  check('El centro de notificaciones filtra por tipo', await page.locator('.notif-cats .chip').count() === 12);
+  check('El centro de notificaciones filtra por tipo', await page.locator('.notif-cats .chip').count() === 14); // 1.15: two new categories
   await page.screenshot({ path: `${SHOTS}/31-centro-notificaciones.png` });
   check('La campana tiene contador o queda sin número cuando no hay pendientes', await page.locator('[data-tour="notifications"]').isVisible());
 });
@@ -1617,7 +1618,7 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   check('Al finalizar con 12 h de 5 h estimadas se informa +7 h (+140 %)', done.data?.deviation?.pct === 140, JSON.stringify(done.data?.deviation));
   await apiCall('/api/monitoring/scan', 'POST', {});
   await page.goto(BASE + '/monitoring');
-  check('El menú lleva a «Monitoreo»', await page.locator('.nav-item[aria-current="page"]', { hasText: 'Monitoreo' }).isVisible());
+  check('El menú lleva a «Monitoreo»', await page.locator('.nav-item[aria-current="page"]', { hasText: 'Carga y alertas' }).isVisible()); // 1.15: «Seguimiento › Carga y alertas»
   check('El resumen muestra los indicadores enlazados y el estado de cada proyecto', await page.locator('.mon-kpis a.stat').count() === 8 && await page.locator('.mon-health li').count() >= 1);
   await page.screenshot({ path: `${SHOTS}/40-monitoreo-resumen.png`, fullPage: true });
   await page.locator('.mon-kpis a[data-kpi="late"]').click();
@@ -1644,6 +1645,8 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   check('El informe se descarga en CSV', /\.csv$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   await page.screenshot({ path: `${SHOTS}/40-monitoreo-informe.png`, fullPage: true });
   await page.goto(BASE + '/t/' + dev.key);
+  check('1.15: la pestaña «Seguimiento» marca que necesita atención', await page.locator('[data-td-tab="tracking"] .td-tab-dot').isVisible());
+  await page.locator('[data-td-tab="tracking"]').click(); // 1.15: tracking lives in its tab of the activity
   check('La ficha de la tarea tiene «Seguimiento» con la desviación de horas', await page.locator('[data-deviation] .dev-over').isVisible());
   const why = page.locator('#td-tracking details', { has: page.locator('select[name=reason]') }); // 1.14: the estimates box has its own form
   check('Con una desviación importante el formulario del motivo aparece abierto (opcional)', await why.evaluate((d) => d.open));
@@ -1845,6 +1848,7 @@ await attempt('1.14 · Nuevo proyecto con responsable, fechas e integrantes', as
 await attempt('1.14 · Estimación del trabajador en la ficha', async () => {
   if (!estKey) { check('Hay una tarea con estimación para probar', false); return; }
   await page.goto(BASE + '/t/' + estKey);
+  await page.locator('[data-td-tab="time"]').click(); // 1.15: estimates live with the hours, in the «Horas» tab
   const box = page.locator('[data-estimates]');
   check('La ficha muestra administración, trabajador, acordado y real', await box.isVisible() && await box.locator('[data-est-agreed]').isVisible() && await box.locator('[data-est-real]').isVisible());
   const form = box.locator('[data-estimate-form]');
@@ -1909,6 +1913,104 @@ await attempt('1.14 · Auditoría, notificaciones y análisis por período', asy
   await page.screenshot({ path: `${SHOTS}/56-analisis-periodo.png`, fullPage: true });
 });
 
+section('Novedades 1.15');
+await attempt('1.15 · Confirmaciones que no bloquean y avisos con un formulario abierto', async () => {
+  const dialogs = [];
+  const onDlg = (d) => { dialogs.push(d.type()); d.dismiss().catch(() => {}); };
+  page.on('dialog', onDlg);
+  await page.goto(BASE + '/');
+  await page.click('[data-dialog="dlg-new-task"]');
+  await page.locator('#dlg-new-task[open]').waitFor();
+  await page.fill('#dlg-new-task [name=title]', 'Borrador sin guardar');
+  await page.keyboard.press('Escape');
+  await page.locator('#dlg-confirm[open]').waitFor({ timeout: 3000 });
+  check('Cerrar un formulario con cambios pregunta dentro de Borealis (no con un diálogo del navegador)', dialogs.length === 0 && await page.locator('#dlg-confirm [data-confirm-text]').textContent().then((t) => t.includes('cambios sin guardar')));
+  // while the question is open the page keeps running: timers and the live badge still work
+  const alive = await page.evaluate(() => new Promise((res) => { const t0 = Date.now(); setTimeout(() => res(Date.now() - t0 < 1500), 200); }));
+  check('Mientras pregunta, la página sigue funcionando (el hilo principal no queda congelado)', alive);
+  await page.click('#dlg-confirm [data-confirm-cancel]');
+  check('«Seguir editando» conserva lo escrito', await page.inputValue('#dlg-new-task [name=title]') === 'Borrador sin guardar');
+  // a new notice arrives while the form is open: the bell updates without leaving the page
+  const before = await page.evaluate(() => document.querySelector('#topbar-notif .notif-badge')?.dataset.unread || '0');
+  const r = await page.evaluate(async () => {
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    const res = await fetch(location.origin + '/api/notifications/status', { headers: { Accept: 'application/json', 'X-Borealis-Background': '1', 'X-CSRF-Token': csrf } });
+    return res.status;
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(600);
+  check('La consulta de avisos funciona con el formulario abierto y no navega', r === 200 && await page.locator('#dlg-new-task[open]').count() === 1 && /\/$/.test(new URL(page.url()).pathname), `${r} ${before}`);
+  await page.keyboard.press('Escape');
+  await page.locator('#dlg-confirm[open]').waitFor();
+  await page.click('#dlg-confirm [data-confirm-ok]');
+  check('«Cerrar sin guardar» cierra el formulario', await page.locator('#dlg-new-task[open]').count() === 0);
+  page.off('dialog', onDlg);
+  check('Ningún diálogo bloqueante del navegador en todo el recorrido', dialogs.length === 0, dialogs.join(','));
+});
+
+await attempt('1.15 · Barra lateral por áreas, favoritos y búsqueda rápida', async () => {
+  await page.goto(BASE + '/');
+  check('La barra lateral muestra las áreas', await page.locator('[data-nav-group]').count() >= 3);
+  await page.locator('[data-nav-group="org"] > summary').click();
+  await page.waitForTimeout(700);
+  await page.reload();
+  check('Un grupo plegado se recuerda al volver', !(await page.locator('[data-nav-group="org"]').evaluate((d) => d.open)));
+  await page.locator('[data-nav-group="org"] > summary').click();
+  await page.waitForTimeout(700);
+  await page.click('[data-nav-compact]');
+  await page.waitForTimeout(600);
+  const w = await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().width);
+  check('La barra se compacta a solo iconos', w < 100, String(w));
+  await page.screenshot({ path: `${SHOTS}/57-barra-compacta.png` });
+  await page.click('[data-nav-compact]');
+  await page.waitForTimeout(600);
+  await page.goto(projectUrl.startsWith('http') ? projectUrl : BASE + projectUrl);
+  await page.click('[data-favorite^="project:"]');
+  await waitToast(/favoritos/);
+  await page.reload();
+  check('Un proyecto marcado con la estrella aparece en «Favoritos»', await page.locator('#sidebar-favorites a').count() >= 1);
+  await page.locator('.sidebar').screenshot({ path: `${SHOTS}/58-barra-areas.png` });
+  await page.click('#global-search');
+  await page.locator('#search-recent:not([hidden])').waitFor({ timeout: 4000 });
+  check('Al enfocar la búsqueda se ven favoritos y lo abierto hace poco', await page.locator('#search-recent a').count() >= 1);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(BASE + '/');
+  check('En el móvil hay barra inferior con Inicio, Mi trabajo, Nueva, Bandeja y Menú', await page.locator('.mobile-tabs').isVisible() && await page.locator('.mobile-tabs > *').count() === 5);
+  await page.screenshot({ path: `${SHOTS}/59-movil-barra-inferior.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
+});
+
+await attempt('1.15 · Vistas de tareas y detalle en tres zonas', async () => {
+  await page.goto(BASE + '/tasks?tab=team&view=board&group=project');
+  check('Tablero de tareas del equipo', await page.locator('.task-board .task-board-col').count() === 3);
+  await page.screenshot({ path: `${SHOTS}/60-tareas-tablero.png`, fullPage: true });
+  await page.goto(BASE + '/tasks?tab=team&view=list&group=assignee');
+  check('Lista compacta agrupada por responsable', await page.locator('.task-compact li').count() > 0 && await page.locator('.task-group-head').count() > 0);
+  await page.goto(BASE + '/tasks?tab=team');
+  check('Se recuerda la última vista elegida', await page.locator('#ptasks-region[data-view="list"]').count() === 1);
+  await page.locator('.task-compact [data-open-task]').first().click();
+  await page.locator('#drawer.open [data-task-detail]').waitFor();
+  check('Abrir desde la lista muestra el panel lateral con Seguir, propiedades y progreso', await page.locator('#drawer [data-watch]').isVisible() && await page.locator('#drawer [data-progress]').count() === 1);
+  await page.screenshot({ path: `${SHOTS}/61-detalle-tres-zonas.png` });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('#drawer.open'), null, { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  check('Al cerrar el panel se queda en la misma vista', new URL(page.url()).searchParams.get('tab') === 'team' && await page.locator('.task-compact').count() >= 1 && !(await page.locator('#drawer.open').count()));
+});
+
+await attempt('1.15 · Registro maestro y automatizaciones', async () => {
+  await page.goto(BASE + '/admin/audit?group=day');
+  check('El registro maestro muestra la línea de tiempo por día con colores por tipo', await page.locator('.audit-entry').count() > 0 && await page.locator('[data-audit-heading]').count() > 0);
+  await page.screenshot({ path: `${SHOTS}/62-registro-maestro.png`, fullPage: true });
+  await page.goto(BASE + '/admin/automations');
+  await page.locator('form[data-template="blocked_review"] button[type=submit]').click();
+  await waitToast(/activada/);
+  await page.waitForTimeout(300);
+  check('Activar una plantilla de automatización desde la página', await page.locator('[data-rule="blocked_review"]').count() === 1);
+  await page.screenshot({ path: `${SHOTS}/63-automatizaciones.png`, fullPage: true });
+});
+
 const viewports = { escritorio: [1440, 900], portatil: [1280, 800], tableta: [820, 1180], movil: [390, 844] };
 const pagesToShoot = { inicio: '/', proyectos: '/projects', tablero: projectUrl + '/board', lista: projectUrl + '/list', resumen: projectUrl, 'mi-trabajo': '/my-work', calendario: '/calendar', monitoreo: '/monitoring', analisis: '/analysis', equipos: '/teams', sprints: '/sprints', 'todo-a-mano': '/integrations', notificaciones: '/notifications' };
 for (const [vname, [w, h]] of Object.entries(viewports)) {
@@ -1924,7 +2026,7 @@ for (const [vname, [w, h]] of Object.entries(viewports)) {
   check(`${vname} ${w}×${h}: sin desplazamiento horizontal de página`, overflow.length === 0, overflow.join(', '));
   if (w < 900) {
     await page.goto(BASE + '/');
-    const toggle = page.locator('[data-sidebar-toggle]');
+    const toggle = page.locator('.topbar [data-sidebar-toggle]');
     check(`${vname}: menú lateral accesible con botón`, await toggle.isVisible());
     await toggle.click();
     await page.waitForTimeout(300);
