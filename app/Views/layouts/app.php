@@ -47,7 +47,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
     $groups = [
         'mine' => ['Mi espacio', [
             ['/', 'home', 'Inicio', $nav === 'home', ''],
-            ['/my-work', 'check-square', 'Mis tareas', $nav === 'my-work', 'my-work', 'mine'],
+            ['/my-work', 'check-square', 'Mi trabajo', $nav === 'my-work', 'my-work', 'mine'],
             ['/calendar', 'calendar', 'Mi calendario', $nav === 'calendar', 'nav-calendar'],
             ['/notifications', 'inbox', 'Bandeja de entrada', $nav === 'notifications', '', 'unread'],
             ['/integrations', 'link', 'Todo a mano', $nav === 'integrations', 'nav-tools'],
@@ -167,7 +167,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
 
 <nav class="mobile-tabs" aria-label="Accesos rápidos">
   <a href="<?= e(url('/')) ?>"<?= $nav === 'home' ? ' aria-current="page"' : '' ?>><?= icon('home') ?><span>Inicio</span></a>
-  <a href="<?= e(url('/my-work')) ?>"<?= $nav === 'my-work' ? ' aria-current="page"' : '' ?>><?= icon('check-square') ?><span>Mis tareas</span></a>
+  <a href="<?= e(url('/my-work')) ?>"<?= $nav === 'my-work' ? ' aria-current="page"' : '' ?>><?= icon('check-square') ?><span>Mi trabajo</span></a>
   <button type="button" class="mobile-tabs-add" data-dialog="dlg-new-task" aria-label="Nueva tarea"><?= icon('plus') ?></button>
   <a href="<?= e(url('/notifications')) ?>"<?= $nav === 'notifications' ? ' aria-current="page"' : '' ?>><?= icon('inbox') ?><span>Bandeja</span><span class="count" data-nav-unread<?= $s['unread'] ? '' : ' hidden' ?>><?= $s['unread'] ? (int)$s['unread'] : '' ?></span></a>
   <button type="button" data-sidebar-toggle aria-controls="sidebar"><?= icon('menu') ?><span>Menú</span></button>

@@ -1,5 +1,59 @@
 # Cambios
 
+## 1.15.0 (24/11/2026)
+
+**Refinamiento funcional, auditoría social y experiencia de uso.** El detalle, la investigación de Atlassian y la evaluación heurística están en `docs/INFORME-1.15.md`. La configuración está en `docs/CONFIGURACION-1.15.md`: no hace falta nada nuevo, solo la migración 017.
+
+**Notificaciones con confirmaciones de salida (causa real).** Se sumaban cinco causas:
+- la campana solo cambiaba al cargar una página;
+- `window.confirm()` congelaba la página;
+- el service worker navegaba la ventana aunque tuviera cambios sin guardar;
+- sin cron, quien se quedaba en un formulario no disparaba el respaldo por visitas;
+- una sesión vencida llevaba al inicio de sesión y se perdía lo escrito.
+
+Cambios:
+- **Campana en vivo:** `notify-live.js` consulta `/api/notifications/status` cada minuto, al volver a la pestaña, al recuperar la red y al llegar un push.
+- **Confirmaciones:** todas usan el diálogo propio, que no bloquea la página.
+- **Avisos del sistema:** el service worker pregunta a la página antes de seguir un aviso; si hay cambios sin guardar, abre otra pestaña.
+- **Sesión:** la consulta en segundo plano no alarga la sesión. Si la sesión termina, aparece un aviso y el formulario se queda.
+- **Protección contra la pérdida de cambios:** se mantiene, con el diálogo propio, y `beforeunload` sigue solo para cerrar la pestaña.
+
+**Registro maestro.** `/admin/audit` reúne todo:
+- **Lo nuevo que registra:** inicio y cierre de sesión e intentos rechazados (con la red abreviada); errores del servidor sin traza; avisos que no se pudieron entregar; resumen diario de avisos; fallos de la tarea programada; automatizaciones y decisiones.
+- **Resultado:** columna nueva (hecho, error, rechazado) que entra en la huella solo cuando existe, así que las cadenas de la 1.14 siguen válidas.
+- **Consulta:** línea de tiempo por día, semana o mes; colores por tipo (trabajo, administración, automático, errores); filtros por tipo, resultado y tarea; enlace al elemento; páginas por n.º.
+- **Exportación:** JSON con las huellas, y CSV con columnas nuevas.
+- **Conservación opcional:** `bin/audit-archive.php` archiva sin romper la comprobación de integridad.
+
+**Barra lateral.**
+- Cuatro áreas plegables según el rol: Mi espacio, Organización, Seguimiento y Administración.
+- Modo compacto, favoritos (estrella en proyectos y tareas) y barra inferior en el móvil.
+- La búsqueda muestra favoritos y lo abierto hace poco. Las preferencias se guardan en el perfil.
+
+**Tareas.**
+- **Pestaña Equipo:** tabla, lista compacta o tablero. Se agrupa por proyecto, responsable, estado o fecha, y se filtra por responsable, fecha, prioridad, bloqueo y texto.
+- **Vistas guardadas:** personales o compartidas. La vista elegida se recuerda. Las páginas son de 100.
+- **Detalle:** cabecera con Seguir y Favorito; propiedades con horas reales y progreso; contenido en el orden descripción, subtareas, dependencias, archivos, comentarios, horas e historial.
+
+**Colaboración.**
+- **Seguir una tarea:** llegan sus comentarios y cambios de estado, sin duplicar los avisos de responsables. Por defecto no llegan al móvil.
+- **Decisiones:** un comentario se marca como decisión; queda en el registro y en el resumen del proyecto.
+
+**Automatizaciones** (Administración › Automatizaciones). Siete plantillas:
+- tarea vencida;
+- bloqueo resuelto;
+- superó las horas acordadas;
+- proyecto terminado;
+- prioridades de la semana;
+- informe al cerrar el sprint;
+- bloqueo prolongado.
+
+Solo envían avisos: no hay bucles. Cada acción tiene una clave única, así que nunca se repite. Hay un tope por ejecución, permisos de administración y registro de cada ejecución.
+
+**Monitoreo.** Quien trabaja ve una nota que dice quién más puede ver sus datos de carga. Borealis no mide tiempo en pantalla.
+
+**Migración `017_v115`:** solo agrega columnas e índices (`activity.result`, `audit_chain.base_id` y `base_hash`, `comments.is_decision`) y seis tablas (`user_favorites`, `user_recent`, `saved_views`, `task_watchers`, `automation_rules`, `automation_runs`).
+
 ## 1.14.0 (24/11/2026)
 
 **Gestión, monitoreo y trazabilidad.** El detalle de lo que se hizo, lo que no y por qué está en `docs/INFORME-1.14.md`. La configuración de la tarea programada está en `docs/CONFIGURACION-1.14.md`.

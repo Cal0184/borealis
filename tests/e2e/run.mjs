@@ -1909,6 +1909,101 @@ await attempt('1.14 · Auditoría, notificaciones y análisis por período', asy
   await page.screenshot({ path: `${SHOTS}/56-analisis-periodo.png`, fullPage: true });
 });
 
+await attempt('1.15 · Confirmaciones que no bloquean y avisos con un formulario abierto', async () => {
+  const dialogs = [];
+  const onDlg = (d) => { dialogs.push(d.type()); d.dismiss().catch(() => {}); };
+  page.on('dialog', onDlg);
+  await page.goto(BASE + '/');
+  await page.click('[data-dialog="dlg-new-task"]');
+  await page.locator('#dlg-new-task[open]').waitFor();
+  await page.fill('#dlg-new-task [name=title]', 'Borrador sin guardar');
+  await page.keyboard.press('Escape');
+  await page.locator('#dlg-confirm[open]').waitFor({ timeout: 3000 });
+  check('Cerrar un formulario con cambios pregunta dentro de Borealis (no con un diálogo del navegador)', dialogs.length === 0 && await page.locator('#dlg-confirm [data-confirm-text]').textContent().then((t) => t.includes('cambios sin guardar')));
+  // while the question is open the page keeps running: timers and the live badge still work
+  const alive = await page.evaluate(() => new Promise((res) => { const t0 = Date.now(); setTimeout(() => res(Date.now() - t0 < 1500), 200); }));
+  check('Mientras pregunta, la página sigue funcionando (el hilo principal no queda congelado)', alive);
+  await page.click('#dlg-confirm [data-confirm-cancel]');
+  check('«Seguir editando» conserva lo escrito', await page.inputValue('#dlg-new-task [name=title]') === 'Borrador sin guardar');
+  // a new notice arrives while the form is open: the bell updates without leaving the page
+  const before = await page.evaluate(() => document.querySelector('#topbar-notif .notif-badge')?.dataset.unread || '0');
+  const r = await page.evaluate(async () => {
+    const csrf = document.querySelector('meta[name="csrf-token"]').content;
+    const res = await fetch(location.origin + '/api/notifications/status', { headers: { Accept: 'application/json', 'X-Borealis-Background': '1', 'X-CSRF-Token': csrf } });
+    return res.status;
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(600);
+  check('La consulta de avisos funciona con el formulario abierto y no navega', r === 200 && await page.locator('#dlg-new-task[open]').count() === 1 && /\/$/.test(new URL(page.url()).pathname), `${r} ${before}`);
+  await page.keyboard.press('Escape');
+  await page.locator('#dlg-confirm[open]').waitFor();
+  await page.click('#dlg-confirm [data-confirm-ok]');
+  check('«Cerrar sin guardar» cierra el formulario', await page.locator('#dlg-new-task[open]').count() === 0);
+  page.off('dialog', onDlg);
+  check('Ningún diálogo bloqueante del navegador en todo el recorrido', dialogs.length === 0, dialogs.join(','));
+});
+
+await attempt('1.15 · Barra lateral por áreas, favoritos y búsqueda rápida', async () => {
+  await page.goto(BASE + '/');
+  check('La barra lateral muestra las áreas', await page.locator('[data-nav-group]').count() >= 3);
+  await page.locator('[data-nav-group="org"] > summary').click();
+  await page.waitForTimeout(700);
+  await page.reload();
+  check('Un grupo plegado se recuerda al volver', !(await page.locator('[data-nav-group="org"]').evaluate((d) => d.open)));
+  await page.locator('[data-nav-group="org"] > summary').click();
+  await page.waitForTimeout(700);
+  await page.click('[data-nav-compact]');
+  await page.waitForTimeout(600);
+  const w = await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().width);
+  check('La barra se compacta a solo iconos', w < 100, String(w));
+  await page.screenshot({ path: `${SHOTS}/57-barra-compacta.png` });
+  await page.click('[data-nav-compact]');
+  await page.waitForTimeout(600);
+  await page.goto(projectUrl);
+  await page.click('[data-favorite^="project:"]');
+  await waitToast(/favoritos/);
+  await page.reload();
+  check('Un proyecto marcado con la estrella aparece en «Favoritos»', await page.locator('#sidebar-favorites a').count() >= 1);
+  await page.locator('.sidebar').screenshot({ path: `${SHOTS}/58-barra-areas.png` });
+  await page.click('#global-search');
+  await page.locator('#search-recent:not([hidden])').waitFor({ timeout: 4000 });
+  check('Al enfocar la búsqueda se ven favoritos y lo abierto hace poco', await page.locator('#search-recent a').count() >= 1);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(BASE + '/');
+  check('En el móvil hay barra inferior con Inicio, Mi trabajo, Nueva, Bandeja y Menú', await page.locator('.mobile-tabs').isVisible() && await page.locator('.mobile-tabs > *').count() === 5);
+  await page.screenshot({ path: `${SHOTS}/59-movil-barra-inferior.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
+});
+
+await attempt('1.15 · Vistas de tareas y detalle en tres zonas', async () => {
+  await page.goto(BASE + '/tasks?tab=team&view=board&group=project');
+  check('Tablero de tareas del equipo', await page.locator('.task-board .task-board-col').count() === 3);
+  await page.screenshot({ path: `${SHOTS}/60-tareas-tablero.png`, fullPage: true });
+  await page.goto(BASE + '/tasks?tab=team&view=list&group=assignee');
+  check('Lista compacta agrupada por responsable', await page.locator('.task-compact li').count() > 0 && await page.locator('.task-group-head').count() > 0);
+  await page.goto(BASE + '/tasks?tab=team');
+  check('Se recuerda la última vista elegida', await page.locator('#ptasks-region[data-view="list"]').count() === 1);
+  await page.locator('.task-compact [data-open-task]').first().click();
+  await page.locator('#drawer.open [data-task-detail]').waitFor();
+  check('Abrir desde la lista muestra el panel lateral con Seguir, propiedades y progreso', await page.locator('#drawer [data-watch]').isVisible() && await page.locator('#drawer [data-progress]').count() === 1);
+  await page.screenshot({ path: `${SHOTS}/61-detalle-tres-zonas.png` });
+  await page.keyboard.press('Escape');
+  check('Al cerrar el panel se queda en la misma vista', new URL(page.url()).searchParams.get('tab') === 'team' && await page.locator('.task-compact').count() === 1);
+});
+
+await attempt('1.15 · Registro maestro y automatizaciones', async () => {
+  await page.goto(BASE + '/admin/audit?group=day');
+  check('El registro maestro muestra la línea de tiempo por día con colores por tipo', await page.locator('.audit-entry').count() > 0 && await page.locator('[data-audit-heading]').count() > 0);
+  await page.screenshot({ path: `${SHOTS}/62-registro-maestro.png`, fullPage: true });
+  await page.goto(BASE + '/admin/automations');
+  await page.locator('form[data-template="blocked_review"] button[type=submit]').click();
+  await waitToast(/activada/);
+  await page.waitForTimeout(300);
+  check('Activar una plantilla de automatización desde la página', await page.locator('[data-rule="blocked_review"]').count() === 1);
+  await page.screenshot({ path: `${SHOTS}/63-automatizaciones.png`, fullPage: true });
+});
+
 const viewports = { escritorio: [1440, 900], portatil: [1280, 800], tableta: [820, 1180], movil: [390, 844] };
 const pagesToShoot = { inicio: '/', proyectos: '/projects', tablero: projectUrl + '/board', lista: projectUrl + '/list', resumen: projectUrl, 'mi-trabajo': '/my-work', calendario: '/calendar', monitoreo: '/monitoring', analisis: '/analysis', equipos: '/teams', sprints: '/sprints', 'todo-a-mano': '/integrations', notificaciones: '/notifications' };
 for (const [vname, [w, h]] of Object.entries(viewports)) {

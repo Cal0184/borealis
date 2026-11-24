@@ -25,7 +25,7 @@ foreach (preg_split('/^-- @@\s*$/m', (string)file_get_contents($root . '/databas
     try { $q($sql); } catch (PDOException $e) { if (!in_array((int)($e->errorInfo[1] ?? 0), [1060, 1061, 1050], true)) $errors[] = $e->getMessage(); }
 }
 check('La migración 017 se puede repetir sin errores', !$errors, implode(' | ', $errors));
-check('Versión 1.15.0', BOREALIS_VERSION === '1.15.0' || str_contains((string)file_get_contents($root . '/app/bootstrap.php'), "'1.15.0'"));
+check('Versión 1.15.0', str_contains((string)file_get_contents($root . '/app/bootstrap.php'), "'1.15.0'"));
 
 // ================================================================ notices while a page is open
 group('1.15 · Avisos con la página abierta');
@@ -41,7 +41,7 @@ $anon->request('GET', '/api/notifications/status', null, ['Accept: application/j
 check('Sin sesión responde 401 (la página muestra un aviso y no abandona el formulario)', $anon->status === 401);
 $js = (string)file_get_contents($root . '/public/assets/js/notify-live.js') . (string)file_get_contents($root . '/public/sw.js') . (string)file_get_contents($root . '/public/assets/js/core.js');
 check('Ninguna confirmación usa window.confirm (bloquea la página); el service worker pregunta por cambios sin guardar antes de seguir un aviso',
-    !preg_match('/window\.confirm\(|[^.\w]confirm\(\s*[\'"`]/', (string)file_get_contents($root . '/public/assets/js/ui.js') . (string)file_get_contents($root . '/public/assets/js/drawer.js') . (string)file_get_contents($root . '/public/assets/js/core.js'))
+    !preg_match('/^(?!\s*(\/\/|\*)).*(window\.confirm\(|[^.\w]confirm\(\s*[\'"`])/m', (string)file_get_contents($root . '/public/assets/js/ui.js') . (string)file_get_contents($root . '/public/assets/js/drawer.js') . (string)file_get_contents($root . '/public/assets/js/core.js'))
     && str_contains($js, 'borealis-dirty?') && str_contains($js, 'X-Borealis-Background') && str_contains($js, 'session-ended'));
 $sess = (string)file_get_contents($root . '/app/Core/Session.php');
 check('La consulta en segundo plano no alarga la sesión', str_contains($sess, 'X-Borealis-Background') || str_contains($sess, 'HTTP_X_BOREALIS_BACKGROUND'));
@@ -158,8 +158,9 @@ $juanC->get('/tasks?tab=team');
 check('Una vista compartida aparece para el resto (cada quien ve solo lo suyo)', str_contains($juanC->body, 'Vencidas de Capacidad Norte'));
 $juanC->api('DELETE', "/api/views/$vid");
 check('…pero solo quien la creó puede borrarla', $juanC->status === 403);
-$juanC->api('POST', '/api/views', ['name' => 'Mía', 'query' => 'assignee=me', 'shared' => true]);
-$mine = $q('SELECT shared FROM saved_views WHERE id = ?', [(int)($juanC->json()['id'] ?? 0)])->fetchColumn();
+[$gina, $ginaC] = $mkUser('Gina Invitada', 'gina.invitada@example.test', 'guest');
+$ginaC->api('POST', '/api/views', ['name' => 'Mía', 'query' => 'assignee=me', 'shared' => true]);
+$mine = $q('SELECT shared FROM saved_views WHERE id = ?', [(int)($ginaC->json()['id'] ?? 0)])->fetchColumn();
 check('Quien no puede crear proyectos guarda vistas solo para sí', $mine !== false && (int)$mine === 0);
 $admin->api('DELETE', "/api/views/$vid");
 check('Borrar la propia vista', $admin->status === 200 && $cnt('SELECT COUNT(*) FROM saved_views WHERE id = ?', [$vid]) === 0);
@@ -223,10 +224,24 @@ check('«Bloqueo resuelto»: al finalizar la tarea que bloqueaba, avisa a quien 
 $admin->api('POST', "/api/tasks/$blk/done", ['done' => false]);
 $admin->api('POST', "/api/tasks/$blk/done", ['done' => true]);
 check('…y no lo repite si se reabre y se vuelve a finalizar', $cnt("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND type = 'automation' AND task_id = ?", [$lucia, $dep]) === 1);
+// hours over the estimate and a long block → the project lead is asked
+$admin->api('POST', '/api/automations', ['template' => 'hours_over', 'project_id' => $pA, 'pct' => 20]);
+$admin->api('POST', '/api/automations', ['template' => 'blocked_review', 'project_id' => $pA, 'days' => 3]);
+$admin->api('PATCH', "/api/projects/$pA", ['lead_user_id' => $marta]);
+$tH = $task($pA, 'Se pasó de horas', ['estimate_hours' => 1, 'assignee_id' => $juan]);
+$juanC->api('POST', "/api/tasks/$tH/time", ['hours' => '2', 'work_date' => $todayL]);
+$tK = $task($pA, 'Bloqueada hace días', ['assignee_id' => $juan]);
+$q("UPDATE tasks SET is_blocked = 1, blocked_reason = 'Falta el permiso municipal', blocked_at = UTC_TIMESTAMP() - INTERVAL 5 DAY WHERE id = ?", [$tK]);
+$lead = (int)$q('SELECT COALESCE(lead_user_id, created_by) FROM projects WHERE id = ?', [$pA])->fetchColumn();
+$cron();
+$mH = $q("SELECT message FROM notifications WHERE user_id = ? AND type = 'automation' AND task_id = ?", [$lead, $tH])->fetchColumn();
+$mK = $q("SELECT message FROM notifications WHERE user_id = ? AND type = 'automation' AND task_id = ?", [$lead, $tK])->fetchColumn();
+check('«Superó las horas acordadas» y «Bloqueo prolongado» avisan a quien lleva el proyecto', $lead > 0 && $mH && str_contains((string)$mH, '+20 %') && $mK && str_contains((string)$mK, 'más de 3 días bloqueada'), json_encode([$lead, $mH, $mK]));
 $admin->api('DELETE', "/api/automations/$ruleB");
 check('Eliminar una automatización queda registrado', $admin->status === 200 && $cnt("SELECT COUNT(*) FROM activity WHERE action = 'auto_deleted' AND entity_id = ?", [$ruleB]) === 1);
 $lp = json_decode((string)$q('SELECT prefs FROM users WHERE id = ?', [$lucia])->fetchColumn(), true) ?: [];
-check('Cada persona puede apagar los avisos de automatizaciones en su perfil (categoría propia)', isset(\Borealis\Services\Notifications::CATEGORIES['automation'], \Borealis\Services\Notifications::CATEGORIES['watching']));
+$ncode = (string)file_get_contents($root . '/app/Services/Notifications.php');
+check('Cada persona puede apagar los avisos de automatizaciones y de tareas que sigue en su perfil (categorías propias)', str_contains($ncode, "'automation' => ['Automatizaciones'") && str_contains($ncode, "'watching' => ['Tareas que sigues'"));
 
 // ================================================================ upgrade
 group('1.15 · Actualización desde la 1.14');

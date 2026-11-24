@@ -1,4 +1,4 @@
-# Estado de funciones — Borealis 1.14.0
+# Estado de funciones — Borealis 1.15.0
 
 **Criterio:** una función aparece como *Implementado y probado* solo si una prueba automatizada la ejerció de verdad y pasó (ver [PRUEBAS.md](PRUEBAS.md)). Que su pantalla abra sin errores no cuenta como probarla. Lo que solo se revisó leyendo el código aparece como *pendiente de prueba*.
 
@@ -8,6 +8,25 @@
 | 🟡 Implementado, pendiente de prueba | Existe y su pantalla carga, pero ninguna prueba ejercita su comportamiento |
 | 🔧 En desarrollo | Parcial |
 | ⏳ Pendiente | No incluido todavía |
+
+## Novedades de 1.15
+
+| Función | Estado | Notas |
+|---|---|---|
+| Campana en vivo con la página abierta (`/api/notifications/status`), sin alargar la sesión, sin navegar con sesión vencida | ✅ | Integración «1.15 · Avisos con la página abierta» y navegador |
+| Confirmaciones propias que no bloquean (sin `window.confirm`), protección de cambios conservada | ✅ | Navegador «1.15 · Confirmaciones…» |
+| El service worker no navega una ventana con cambios sin guardar | 🟡 | Código revisado; probarlo exige un push real del sistema operativo |
+| Notificaciones del sistema con el navegador cerrado | 🟡 | Depende del navegador y del sistema (INFORME-1.15 § 3); no se puede probar aquí |
+| Registro maestro: accesos, intentos rechazados, resultado en la huella, tipos, agrupación, páginas por n.º, JSON y CSV | ✅ | Integración «1.15 · Registro maestro» y navegador |
+| Errores del servidor y avisos no entregados en el registro | 🟡 | El resumen diario y los fallos de entrega se escriben en la tarea programada; el error del servidor no se provoca en las pruebas |
+| Conservación con `bin/audit-archive.php` (la cadena sigue desde el último archivado) | ✅ | Integración: opciones, mínimo y continuación de la cadena; el archivado real de filas antiguas no se ejerce |
+| Barra lateral por áreas según el rol, grupos recordados, modo compacto, favoritos, recientes, barra inferior móvil | ✅ | Integración y navegador |
+| Tareas › Equipo: tabla, lista, tablero, agrupación, filtros, vista recordada, vistas guardadas | ✅ | Integración y navegador |
+| Detalle de tarea en tres zonas con horas reales y progreso | ✅ | Integración y navegador |
+| Seguir tareas (sin duplicar avisos) y decisiones | ✅ | Integración |
+| Automatizaciones: tarea vencida, bloqueo resuelto, horas superadas y bloqueo prolongado | ✅ | Integración (sin repetición, pausa, permisos, registro) |
+| Automatizaciones: proyecto terminado, prioridades de la semana, informe de sprint | 🟡 | Implementadas con la misma base; sin prueba propia de su condición |
+| Actualización 1.14 → 1.15 | ✅ | Integración (migración 017 vuelta a aplicar; integridad correcta) |
 
 ## Novedades de 1.14
 

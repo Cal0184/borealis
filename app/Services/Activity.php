@@ -285,7 +285,7 @@ final class Activity
     /** 1.15 · where the element of an entry lives (null when it has no page of its own or was deleted). */
     public static function link(array $a): ?string
     {
-        if (!empty($a['task_id']) && !empty($a['project_key']) && isset($a['task_number'])) return url('/tasks/' . $a['project_key'] . '-' . $a['task_number']);
+        if (!empty($a['task_id']) && !empty($a['project_key']) && isset($a['task_number'])) return url('/t/' . $a['project_key'] . '-' . $a['task_number']);
         return match ($a['entity_type'] ?? '') {
             'project' => !empty($a['entity_id']) && !str_contains((string)$a['action'], 'deleted') ? url('/projects/' . (int)$a['entity_id']) : null,
             'sprint' => !empty($a['project_id']) ? url('/projects/' . (int)$a['project_id'] . '/sprints') : null,
