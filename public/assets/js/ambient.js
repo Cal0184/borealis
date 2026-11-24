@@ -1,5 +1,5 @@
 // Perfil › Apariencia: one click applies the background at once and saves it for this person only.
-import { api, toast, saveState } from './core.js?v=1.13.0';
+import { api, toast, saveState } from './core.js?v=1.14.0';
 
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-ambient-pick]');
