@@ -433,7 +433,14 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-bulk-delete]')) { bulk('delete', null); return; }
 
   const leave = t.closest('[data-confirm-leave]');
-  if (leave && document.querySelector('form[data-dirty]') && !window.confirm('Tienes cambios sin guardar. ¿Salir sin guardar?')) { e.preventDefault(); }
+  if (leave && document.querySelector('form[data-dirty]') && leave.href) {
+    e.preventDefault();
+    confirmAction('Tienes cambios sin guardar. ¿Salir sin guardar?', { label: 'Salir sin guardar' }).then((yes) => {
+      if (!yes) return;
+      document.querySelectorAll('form[data-dirty]').forEach((f) => f.removeAttribute('data-dirty'));
+      location.href = leave.href;
+    });
+  }
 });
 
 document.addEventListener('change', (e) => {

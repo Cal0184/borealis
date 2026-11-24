@@ -108,6 +108,7 @@ $r->post('/api/profile/photo', [Api\WorkspaceApi::class, 'photo']);
 $r->delete('/api/profile/photo', [Api\WorkspaceApi::class, 'removePhoto']);
 $r->post('/api/profile/password', [Api\WorkspaceApi::class, 'password']);
 $r->patch('/api/profile/prefs', [Api\WorkspaceApi::class, 'prefs']);
+$r->get('/api/notifications/status', [Api\WorkspaceApi::class, 'notificationStatus']);
 $r->post('/api/notifications/read-all', [Api\WorkspaceApi::class, 'readAll']);
 $r->post('/api/notifications/{id}/read', [Api\WorkspaceApi::class, 'read']);
 

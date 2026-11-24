@@ -25,7 +25,9 @@ final class Session
             $_SESSION = [];
             session_regenerate_id(true);
         }
-        $_SESSION['_last'] = time();
+        // 1.15: the background check for new notices (X-Borealis-Background) never counts as activity,
+        // so an open tab does not keep a session alive forever.
+        if (($_SERVER['HTTP_X_BOREALIS_BACKGROUND'] ?? '') !== '1' || !isset($_SESSION['_last'])) $_SESSION['_last'] = time();
     }
 
     public static function get(string $k, mixed $d = null): mixed { return $_SESSION[$k] ?? $d; }

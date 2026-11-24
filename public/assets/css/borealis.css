@@ -1556,3 +1556,8 @@ code.copyable { word-break: break-all; }
 .an-bars li { display: grid; grid-template-columns: minmax(90px, 200px) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
 .an-bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .an-bar > span { display: block; height: 100%; background: var(--forest-600); border-radius: 999px; }
+
+/* 1.15 · live notice badge and the non-blocking "session ended" banner */
+.notif-badge{position:absolute;top:-2px;right:-4px;padding:0 5px;line-height:16px;font-size:10.5px}
+.session-banner{position:sticky;top:0;z-index:60;padding:10px 16px;background:var(--warning-soft,#fff4d6);color:var(--text,#1d2b24);border-bottom:1px solid var(--border,#e3e8e5);font-size:14px;text-align:center}
+.session-banner a{font-weight:600;text-decoration:underline}

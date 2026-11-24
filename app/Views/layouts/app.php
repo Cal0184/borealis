@@ -50,7 +50,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
       <a class="nav-item" data-tour="nav-tools" href="<?= e(url('/integrations')) ?>"<?= $nav === 'integrations' ? ' aria-current="page"' : '' ?>><?= icon('link') ?> Todo a mano</a>
       <a class="nav-item" href="<?= e(url('/monitoring')) ?>"<?= in_array($nav, ['monitoring', 'reports'], true) ? ' aria-current="page"' : '' ?>><?= icon('chart') ?> Monitoreo</a>
       <a class="nav-item" data-tour="nav-analysis" href="<?= e(url('/analysis')) ?>"<?= $nav === 'analysis' ? ' aria-current="page"' : '' ?>><?= icon('timeline') ?> Análisis</a>
-      <a class="nav-item" href="<?= e(url('/notifications')) ?>"<?= $nav === 'notifications' ? ' aria-current="page"' : '' ?>><?= icon('bell') ?> Notificaciones<?php if ($s['unread']): ?><span class="count"><?= (int)$s['unread'] ?></span><?php endif; ?></a>
+      <a class="nav-item" href="<?= e(url('/notifications')) ?>"<?= $nav === 'notifications' ? ' aria-current="page"' : '' ?>><?= icon('bell') ?> Notificaciones<span class="count" data-nav-unread<?= $s['unread'] ? '' : ' hidden' ?>><?= $s['unread'] ? (int)$s['unread'] : '' ?></span></a>
     </nav>
     <?php $wk = $s['week_minutes']; $wh = $s['weekly_hours']; $wp = $wh ? min(100, (int)round($wk / ($wh * 60) * 100)) : 0; ?>
     <a class="week-card" id="sidebar-week" data-tour="hours" data-region href="<?= e(url('/my-work')) ?>" aria-label="Tu semana: <?= e(\Borealis\Services\TimeEntries::fmt($wk)) ?> registradas<?= $wh ? ' de ' . e(rtrim(rtrim(number_format($wh, 1, '.', ''), '0'), '.')) . ' h' : '' ?>">
@@ -101,7 +101,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
         <button class="btn btn--aurora" type="button" data-dialog="dlg-new-task" data-tour="new-task"><?= icon('plus') ?><span class="hide-sm">Nueva tarea</span></button>
         <div class="menu-wrap">
           <button class="btn btn--ghost btn--icon" type="button" data-menu data-menu-src="<?= e(url('/notifications/menu')) ?>" aria-label="Notificaciones" data-tour="notifications" aria-haspopup="true" aria-expanded="false">
-            <?= icon('bell') ?><span id="topbar-notif" data-region><?php if ($s['unread']): ?><span class="badge success" style="position:absolute;top:-2px;right:-4px;padding:0 5px;line-height:16px;font-size:10.5px"><?= (int)$s['unread'] ?></span><?php endif; ?></span>
+            <?= icon('bell') ?><span id="topbar-notif" data-region><?php if ($s['unread']): ?><span class="badge success notif-badge" data-unread="<?= (int)$s['unread'] ?>"><?= $s['unread'] > 99 ? '99+' : (int)$s['unread'] ?></span><?php endif; ?></span>
           </button>
           <div class="menu notif-menu" role="menu"><div class="loading"></div></div>
         </div>

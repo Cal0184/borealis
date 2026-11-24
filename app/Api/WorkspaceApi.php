@@ -214,6 +214,23 @@ final class WorkspaceApi
         return Response::ok(['unread' => Notifications::unreadCount()], '');
     }
 
+    /**
+     * 1.15 · live notices for an open page (notify-live.js): unread count and anything newer than
+     * «after». Read-only and cheap; the page asks every minute while it is visible, at once when it
+     * becomes visible again or the connection returns, and when the service worker received a push.
+     */
+    public function notificationStatus(Request $r): Response
+    {
+        $after = max(0, (int)$r->q('after'));
+        $db = \Borealis\Core\Database::get();
+        $rows = $db->all('SELECT id, type, message, url, created_at FROM notifications WHERE user_id = ? AND workspace_id = ? AND read_at IS NULL AND id > ? ORDER BY id DESC LIMIT 5',
+            [\Borealis\Core\Auth::id(), Policy::wsId(), $after]);
+        $latest = (int)$db->value('SELECT COALESCE(MAX(id), 0) FROM notifications WHERE user_id = ? AND workspace_id = ?', [\Borealis\Core\Auth::id(), Policy::wsId()]);
+        $items = array_map(fn($n) => ['id' => (int)$n['id'], 'title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'],
+            'url' => url('/notifications/' . (int)$n['id'] . '/open')], $rows);
+        return Response::ok(['unread' => Notifications::unreadCount(), 'latest' => $latest, 'items' => $after ? $items : []], '');
+    }
+
     public function readAll(Request $r): Response
     {
         Notifications::markAllRead();

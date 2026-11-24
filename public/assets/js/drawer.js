@@ -1,5 +1,5 @@
 // Task detail drawer: opens a task over the current view without losing filters or scroll.
-import { appUrl, isDirty, runInit, toast, refresh } from './core.js?v=1.14.0';
+import { appUrl, isDirty, runInit, toast, refresh, confirmAction } from './core.js?v=1.14.0';
 
 const drawer = () => document.getElementById('drawer');
 let lastOpener = null;
@@ -18,7 +18,10 @@ export async function openTask(key, opener = null) {
   }
   const d = drawer();
   if (!d) { location.href = appUrl('/t/' + key); return; }
-  if (d.classList.contains('open') && !closeDrawer(false, true)) return;
+  if (d.classList.contains('open') && isDirty(d)) {
+    if (await confirmAction('Tienes cambios sin guardar en esta tarea. ¿Abrir la otra de todos modos?', { label: 'Abrir sin guardar' })) { closeDrawer(true, true); openTask(key, opener); }
+    return;
+  }
   const src = appUrl('/t/' + encodeURIComponent(key), { drawer: 1 });
   const body = document.getElementById('drawer-body');
   body.innerHTML = '<div class="drawer-loading" role="status">Cargando…</div>';
@@ -53,7 +56,10 @@ export function closeDrawer(force = false, switching = false) {
     }
     return true;
   }
-  if (!force && isDirty(d) && !window.confirm('Tienes cambios sin guardar en esta tarea. ¿Cerrar de todos modos?')) return false;
+  if (!force && isDirty(d)) {
+    confirmAction('Tienes cambios sin guardar en esta tarea. ¿Cerrar de todos modos?', { label: 'Cerrar sin guardar' }).then((yes) => { if (yes) closeDrawer(true, switching); });
+    return false;
+  }
   d.classList.remove('open');
   d.setAttribute('aria-hidden', 'true');
   delete d.dataset.src;

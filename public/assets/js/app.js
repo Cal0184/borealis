@@ -16,6 +16,7 @@ import './push.js?v=1.14.0';
 import './analysis.js?v=1.14.0';
 import './workload.js?v=1.14.0';
 import './gantt.js?v=1.14.0';
+import './notify-live.js?v=1.14.0';
 import { openFromUrl } from './drawer.js?v=1.14.0';
 
 // The greeting follows the person's own clock (the server only knows the installation's time zone).
