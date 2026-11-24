@@ -50,6 +50,50 @@ final class History
         return array_values($out);
     }
 
+    /**
+     * 1.14 · «¿Qué ocurrió en el período?»: projects started and finished, work assigned and completed,
+     * pending and overdue now, hours logged and where they went, unplanned work (imprevistos and quick
+     * work) and agreed versus real hours of what was finished. Facts only, each with its record count.
+     */
+    public static function movement(array $pids, string $from, string $to, array $f, array $finished): array
+    {
+        $out = ['projects_started' => 0, 'projects_finished' => 0, 'created' => 0, 'done' => count($finished), 'open' => 0, 'overdue' => 0,
+            'hours' => 0.0, 'unplanned_hours' => 0.0, 'unplanned_created' => 0, 'quick_hours' => 0.0, 'by_project' => [], 'agreed' => 0.0, 'real' => 0.0, 'compared' => 0];
+        if (!$pids) return $out;
+        $db = Database::get();
+        $in = Database::in($pids);
+        [$pw, $pp] = Analysis::peopleFilter($f);
+        $a = $from . ' 00:00:00';
+        $b = $to . ' 23:59:59';
+        if (!$pw) {
+            $out['projects_started'] = (int)$db->value("SELECT COUNT(*) FROM projects p WHERE p.id IN ($in) AND p.kind = 'standard' AND COALESCE(p.start_date, DATE(p.created_at)) BETWEEN ? AND ?", array_merge($pids, [$from, $to]));
+            $out['projects_finished'] = (int)$db->value("SELECT COUNT(*) FROM projects p WHERE p.id IN ($in) AND p.kind = 'standard' AND p.completed_at BETWEEN ? AND ?", array_merge($pids, [$a, $b]));
+        }
+        $out['created'] = (int)$db->value("SELECT COUNT(*) FROM tasks t WHERE t.project_id IN ($in) AND t.deleted_at IS NULL AND t.parent_id IS NULL AND t.created_at BETWEEN ? AND ? $pw", array_merge($pids, [$a, $b], $pp));
+        $out['unplanned_created'] = (int)$db->value("SELECT COUNT(*) FROM tasks t WHERE t.project_id IN ($in) AND t.deleted_at IS NULL AND t.unplanned = 1 AND t.created_at BETWEEN ? AND ? $pw", array_merge($pids, [$a, $b], $pp));
+        $out['open'] = (int)$db->value("SELECT COUNT(*) FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE t.project_id IN ($in) AND t.deleted_at IS NULL AND t.parent_id IS NULL AND s.category <> 'done' $pw", array_merge($pids, $pp));
+        $out['overdue'] = (int)$db->value("SELECT COUNT(*) FROM tasks t JOIN statuses s ON s.id = t.status_id WHERE t.project_id IN ($in) AND t.deleted_at IS NULL AND t.parent_id IS NULL AND s.category <> 'done' AND t.due_date < ? $pw", array_merge($pids, [today()], $pp));
+        $rows = $db->all("SELECT p.id, p.name, p.kind, SUM(te.minutes) AS m, SUM(CASE WHEN t.unplanned = 1 THEN te.minutes ELSE 0 END) AS um
+            FROM time_entries te JOIN tasks t ON t.id = te.task_id JOIN projects p ON p.id = te.project_id
+            WHERE te.project_id IN ($in) AND te.deleted_at IS NULL AND te.work_date BETWEEN ? AND ? $pw GROUP BY p.id, p.name, p.kind ORDER BY m DESC", array_merge($pids, [$from, $to], $pp));
+        foreach ($rows as $r) {
+            $h = round((int)$r['m'] / 60, 1);
+            $out['hours'] += $h;
+            $out['unplanned_hours'] += round((int)$r['um'] / 60, 1);
+            if ($r['kind'] === 'quick') $out['quick_hours'] += $h;
+            $out['by_project'][] = ['name' => $r['name'], 'hours' => $h, 'quick' => $r['kind'] === 'quick'];
+        }
+        $out['by_project'] = array_slice($out['by_project'], 0, 6);
+        foreach ($finished as $t) {
+            if ($t['parent_id'] || $t['estimate_hours'] === null || (float)$t['estimate_hours'] <= 0) continue;
+            $out['agreed'] += (float)$t['estimate_hours'];
+            $out['real'] += (int)$t['logged_minutes'] / 60;
+            $out['compared']++;
+        }
+        foreach (['hours', 'unplanned_hours', 'quick_hours', 'agreed', 'real'] as $k) $out[$k] = round($out[$k], 1);
+        return $out;
+    }
+
     /** Punctuality of a finished task from its recorded due date: 'ontime' | 'late' | null (excluded). */
     public static function punctuality(array $t): ?string
     {
@@ -93,6 +137,7 @@ final class History
             'deviation' => ['median_pct' => Metrics::median($devPct), 'median_hours' => Metrics::median($devH), 'p25' => Metrics::percentile($devPct, 25), 'p75' => Metrics::percentile($devPct, 75),
                 'n' => count($devPct), 'top' => $top, 'excluded' => $ex, 'enough' => count($devPct) >= $cfg['min_sample']],
             'reprogram' => self::reprogramming($pids, $from, $to, $f),
+            'movement' => self::movement($pids, $from, $to, $f, $rows),
             'blocks' => self::blocks($pids, $from, $to, $f),
             'sprints' => self::sprints($pids, $from, $to),
             'backlog' => self::backlog($pids, $from, $to, $f),

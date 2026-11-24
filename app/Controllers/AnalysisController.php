@@ -42,9 +42,17 @@ final class AnalysisController
         }
         $from = $r->q('from') && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$r->q('from')) ? (string)$r->q('from') : null;
         $to = $r->q('to') && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$r->q('to')) ? (string)$r->q('to') : null;
+        $preset = is_string($r->q('period')) ? Analysis::preset((string)$r->q('period')) : null;
+        if ($preset) [$from, $to] = $preset;
         [$from, $to] = Analysis::period($from, $to);
         $state = in_array($r->q('state'), ['open', 'done'], true) ? (string)$r->q('state') : 'all';
-        return ['project_id' => $pid, 'team_id' => $team, 'sprint_id' => $sid, 'from' => $from, 'to' => $to, 'mine' => $r->q('mine') === '1', 'state' => $state];
+        // 1.14: one worker, for the administration only (to understand a workload, never to compare people)
+        $uid = null;
+        if ($r->q('user_id') && ctype_digit((string)$r->q('user_id')) && (\Borealis\Security\Policy::can('members.manage') || Analysis::scope()['admin'])) {
+            $uid = \Borealis\Services\Workspaces::isActiveMember((int)$r->q('user_id')) ? (int)$r->q('user_id') : null;
+        }
+        return ['project_id' => $pid, 'team_id' => $team, 'sprint_id' => $sid, 'from' => $from, 'to' => $to, 'mine' => $r->q('mine') === '1', 'state' => $state, 'user_id' => $uid,
+            'period' => $preset ? (string)$r->q('period') : null];
     }
 
     public function index(Request $r): Response
@@ -53,8 +61,8 @@ final class AnalysisController
         $f = self::filters($r);
         $sc = Analysis::scope();
         $pids = Analysis::pids($f['project_id']);
-        $tf = ['mine' => $f['mine'], 'team_id' => $f['team_id'], 'sprint_id' => $f['sprint_id']];
-        $data = ['tab' => $tab, 'filters' => $f, 'cfg' => Analysis::settings(), 'scope' => $sc, 'projects' => array_values($sc['rows']),
+        $tf = ['mine' => $f['mine'], 'team_id' => $f['team_id'], 'sprint_id' => $f['sprint_id'], 'user_id' => $f['user_id']];
+        $data = ['tab' => $tab, 'filters' => $f, 'people' => (\Borealis\Security\Policy::can('members.manage') || $sc['admin']) ? \Borealis\Services\Workspaces::members(false) : [], 'cfg' => Analysis::settings(), 'scope' => $sc, 'projects' => array_values($sc['rows']),
             'teams' => self::teams(), 'canManageAny' => $sc['admin'] || (bool)$sc['managed']];
         $data['sprintOptions'] = $sc['projects'] ? Database::get()->all("SELECT s.id, s.name, s.state, s.project_id FROM sprints s WHERE s.project_id IN (" . Database::in($sc['projects']) . ") ORDER BY s.state = 'completed', s.start_date DESC LIMIT 200", $sc['projects']) : [];
         $key = $tab . '|' . json_encode($f);

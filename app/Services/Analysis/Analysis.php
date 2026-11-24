@@ -133,6 +133,11 @@ final class Analysis
             return [' AND (t.assignee_id = ? OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = ?)'
                 . ' OR (t.team_id IS NOT NULL AND EXISTS (SELECT 1 FROM team_members tmx WHERE tmx.team_id = t.team_id AND tmx.user_id = ?)))', [$u, $u, $u]];
         }
+        if (!empty($f['user_id'])) {
+            $u = (int)$f['user_id'];
+            // 1.14: one worker (only for the administration; never a ranking)
+            return [' AND (t.assignee_id = ? OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = ?))', [$u, $u]];
+        }
         if (!empty($f['team_id'])) {
             $tid = (int)$f['team_id'];
             return [' AND (t.team_id = ? OR t.assignee_id IN (SELECT tm.user_id FROM team_members tm WHERE tm.team_id = ?) OR EXISTS (SELECT 1 FROM task_assignees ta JOIN team_members tm ON tm.user_id = ta.user_id WHERE ta.task_id = t.id AND tm.team_id = ?))', [$tid, $tid, $tid]];
@@ -198,6 +203,23 @@ final class Analysis
     }
 
     /** [from, to] of the analysis: the filters, or the last «history_months» months up to today. */
+    /** 1.14: quick periods — this week, month, quarter, year, last 12 months. */
+    public const PERIODS = ['week' => 'Esta semana', 'month' => 'Este mes', 'quarter' => 'Este trimestre', 'year' => 'Este año', '12m' => 'Últimos 12 meses'];
+
+    public static function preset(string $p): ?array
+    {
+        $t = today();
+        $ts = strtotime($t . ' 12:00:00');
+        return match ($p) {
+            'week' => [date('Y-m-d', $ts - ((int)date('N', $ts) - 1) * 86400), $t],
+            'month' => [date('Y-m-01', $ts), $t],
+            'quarter' => [date('Y', $ts) . '-' . str_pad((string)(intdiv((int)date('n', $ts) - 1, 3) * 3 + 1), 2, '0', STR_PAD_LEFT) . '-01', $t],
+            'year' => [date('Y-01-01', $ts), $t],
+            '12m' => [date('Y-m-d', strtotime($t . ' -12 months +1 day')), $t],
+            default => null,
+        };
+    }
+
     public static function period(?string $from, ?string $to): array
     {
         $to = $to ?: today();

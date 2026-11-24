@@ -8,7 +8,7 @@ use Borealis\Services\Monitoring;
 /** @var string $tab @var array $filters @var array $cfg @var array $scope @var array $projects @var array $teams */
 require BASE_PATH . '/app/Views/partials/analysis-bits.php';
 $f = $filters;
-$keep = array_filter(['project_id' => $f['project_id'], 'team_id' => $f['team_id'], 'mine' => $f['mine'] ? '1' : null]);
+$keep = array_filter(['project_id' => $f['project_id'], 'team_id' => $f['team_id'], 'mine' => $f['mine'] ? '1' : null, 'user_id' => $f['user_id'] ?? null]);
 $link = fn(string $tab, array $extra = []) => url('/analysis', ['tab' => $tab] + $extra + $keep);
 $who = $scope['admin'] ? 'todos los proyectos del espacio' : ($scope['managed'] ? 'tus proyectos y los que gestionas' : 'los proyectos en los que participas');
 $periodTxt = fmt_date($f['from'], true) . ' – ' . fmt_date($f['to'], true);
@@ -39,6 +39,9 @@ $cached = !empty($d['_cached']);
   <?php if (in_array($tab, ['report', 'trends'], true)): ?><label class="sr-only" for="an-s">Sprint</label>
   <select class="select<?= $f['sprint_id'] ? ' filter-active' : '' ?>" id="an-s" name="sprint_id" data-autosubmit><option value="">Cualquier sprint</option>
     <?php foreach ($sprintOptions as $sp): if ($f['project_id'] && (int)$sp['project_id'] !== (int)$f['project_id']) continue; ?><option value="<?= (int)$sp['id'] ?>"<?= selected($sp['id'], $f['sprint_id']) ?>><?= e($sp['name']) ?><?= $sp['state'] === 'active' ? ' · activo' : ($sp['state'] === 'completed' ? ' · cerrado' : '') ?></option><?php endforeach; ?></select><?php endif; ?>
+  <?php if (!empty($people) && $tab !== 'estimates'): ?><label class="sr-only" for="an-u">Persona</label>
+  <select class="select<?= !empty($f['user_id']) ? ' filter-active' : '' ?>" id="an-u" name="user_id" data-autosubmit title="Para entender la carga de alguien, no para comparar personas"><option value="">Cualquier persona</option>
+    <?php foreach ($people as $pp): ?><option value="<?= (int)$pp['id'] ?>"<?= selected($pp['id'], $f['user_id'] ?? '') ?>><?= e($pp['name']) ?></option><?php endforeach; ?></select><?php endif; ?>
   <?php if ($tab !== 'planning'): ?>
   <label class="sr-only" for="an-from">Desde</label><input class="input" type="date" id="an-from" name="from" value="<?= e($f['from']) ?>" title="Desde">
   <label class="sr-only" for="an-to">Hasta</label><input class="input" type="date" id="an-to" name="to" value="<?= e($f['to']) ?>" title="Hasta">
@@ -47,6 +50,7 @@ $cached = !empty($d['_cached']);
   <label class="check" title="Tus indicadores personales: tareas de las que eres responsable"><input type="checkbox" name="mine" value="1"<?= checked((bool)$f['mine']) ?>> Solo lo mío</label>
   <button class="btn" type="submit"><?= icon('filter', 'sm') ?> Aplicar</button>
 </form>
+<?php if ($tab !== 'planning'): ?><nav class="segmented an-periods mb" aria-label="Período"><?php foreach (Analysis::PERIODS as $pk => $pl): ?><a href="<?= e($link($tab, ['period' => $pk])) ?>"<?= ($f['period'] ?? null) === $pk ? ' aria-current="page"' : '' ?> data-period="<?= $pk ?>"><?= e($pl) ?></a><?php endforeach; ?></nav><?php endif; ?>
 <?php endif; ?>
 
 <?php if ($tab === 'summary'): $i = $d['ind']; $cap = $d['cap']; ?>
@@ -69,6 +73,21 @@ $cached = !empty($d['_cached']);
     </a>
     <a class="card stat<?= $riskCount ? ' warn' : '' ?>" href="#an-risks" data-kpi="risks"><span class="label"><?= icon('flag', 'sm') ?> Riesgos relevantes</span><span class="value"><?= (int)$riskCount ?></span><span class="small muted">proyectos y sprints con riesgo moderado o elevado</span></a>
   </div>
+  <?php $mv = $i['movement'] ?? null; if ($mv): ?>
+  <section class="card mb" data-movement><div class="card-head"><h3><?= icon('clock') ?> ¿Qué ocurrió en el período?</h3><span class="muted small"><?= e($periodTxt) ?></span></div><div class="card-body">
+    <div class="grid grid-4 stats an-movement">
+      <div class="stat"><span class="label">Proyectos</span><span class="value an-value-sm" data-mv="projects"><?= (int)$mv['projects_started'] ?> iniciados · <?= (int)$mv['projects_finished'] ?> finalizados</span></div>
+      <div class="stat"><span class="label">Trabajos</span><span class="value an-value-sm" data-mv="tasks"><?= (int)$mv['created'] ?> creados · <?= (int)$mv['done'] ?> finalizados</span><span class="small muted">Hoy: <?= (int)$mv['open'] ?> pendientes, <?= (int)$mv['overdue'] ?> vencidos</span></div>
+      <div class="stat"><span class="label">Horas registradas</span><span class="value an-value-sm" data-mv="hours"><?= e($an_h($mv['hours'])) ?></span><span class="small muted"><?= e($an_h($mv['unplanned_hours'])) ?> en imprevistos<?= $mv['quick_hours'] ? ' · ' . e($an_h($mv['quick_hours'])) . ' en trabajos rápidos' : '' ?></span></div>
+      <div class="stat"><span class="label">Acordado frente a real</span><span class="value an-value-sm" data-mv="estimates"><?= $mv['compared'] ? e($an_h($mv['agreed'])) . ' → ' . e($an_h($mv['real'])) : 'Sin datos' ?></span><span class="small muted"><?= (int)$mv['compared'] ?> trabajos finalizados con horas acordadas</span></div>
+    </div>
+    <?php if ($mv['by_project']): $maxH = max(array_column($mv['by_project'], 'hours')) ?: 1; ?>
+      <h4 class="small-title mt">¿En qué se usaron las horas?</h4>
+      <ul class="an-bars" data-mv="by-project"><?php foreach ($mv['by_project'] as $bp): ?><li><span class="truncate"><?= e($bp['name']) ?></span><span class="an-bar"><span style="width:<?= round($bp['hours'] / $maxH * 100, 1) ?>%"></span></span><span class="small"><?= e($an_h($bp['hours'])) ?></span></li><?php endforeach; ?></ul>
+    <?php endif; ?>
+    <?php if ($mv['unplanned_created']): ?><p class="small muted"><?= (int)$mv['unplanned_created'] ?> trabajos imprevistos o urgentes se crearon en el período: no estaban en la planificación original.</p><?php endif; ?>
+  </div></section>
+  <?php endif; ?>
   <p class="muted small mb">Período analizado: <?= e($periodTxt) ?> · <?= (int)$i['finished'] ?> tareas finalizadas. <?= $cached ? 'Resultado guardado; se recalcula en cuanto cambian los datos.' : 'Calculado ahora.' ?></p>
 
   <section class="card mb" id="an-risks"><div class="card-head"><h3><?= icon('flag') ?> Riesgos relevantes</h3><span class="muted small">Clasificación por reglas configurables. No es una probabilidad.</span></div>
