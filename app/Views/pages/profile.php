@@ -188,6 +188,9 @@
               <label class="check"><input type="checkbox" name="push_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['push_off'], true)) ?>> <?= e($lbl) ?></label>
             <?php endforeach; ?>
           </details>
+          <?php $job = \Borealis\Services\Scheduler::status(); if (in_array($job['state'], ['never', 'stale'], true)): ?>
+            <p class="small notice" data-push-job="<?= e($job['state']) ?>"><?= icon('alert', 'sm') ?> El servidor de Borealis aún no envía avisos por su cuenta: hasta que la administración active la tarea programada, los recordatorios llegan cuando alguien usa Borealis.</p>
+          <?php endif; ?>
           <?php if ($devices): ?><p class="small muted">Dispositivos con avisos: <?= count($devices) ?><?= $devices[0]['last_error'] ? ' · último problema: ' . e($devices[0]['last_error']) : '' ?></p><?php endif; ?>
         </div>
         <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar notificaciones</button></div>

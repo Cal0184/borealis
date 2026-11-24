@@ -16,8 +16,13 @@ if (!Config::isInstalled()) {
     exit;
 }
 
-Session::start();
+// 1.14: the scheduled job by URL (/cron/run?token=…), without session or cookies.
 $request = Request::capture();
+if ($request->path === '/cron/run') {
+    try { Borealis\Controllers\CronController::handle($request)->send(); } catch (Throwable $e) { error_log('[Borealis] cron: ' . $e->getMessage()); http_response_code(500); echo "Error\n"; }
+    exit;
+}
+Session::start();
 $GLOBALS['__borealis_request'] = $request;
 
 try {
@@ -28,3 +33,5 @@ try {
     $response = ErrorHandler::toResponse($e, $request);
 }
 $response->send();
+// 1.14: if the cron job did not run in the last 5 minutes, run it now, after the answer was sent.
+Borealis\Services\Scheduler::maybeAfterResponse();

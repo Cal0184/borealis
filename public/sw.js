@@ -2,7 +2,7 @@
 // It does NOT cache pages, data or files of Borealis: after an update the browser always gets the new
 // version, and nothing private (projects, sessions, people) is ever stored on the device. The only
 // thing kept is the static «Sin conexión» page, shown when a page cannot be loaded at all.
-const VERSION = '1.10.0';
+const VERSION = '1.14.0';
 const scope = self.registration.scope; // e.g. https://example.org/borealis/
 const OFFLINE = 'borealis-offline-' + VERSION;
 
@@ -52,5 +52,23 @@ self.addEventListener('notificationclick', (event) => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const w of wins) if (w.url.startsWith(scope) && 'focus' in w) { await w.navigate(url).catch(() => {}); return w.focus(); }
     return self.clients.openWindow(url);
+  })());
+});
+
+// 1.14 · the browser replaced the subscription by itself (expired keys, browser update): subscribe
+// again with the same server key and tell Borealis, proving it is the same device with the old
+// endpoint and its old «auth» secret. Works with nobody signed in; if it fails, the next visit
+// re-links the device (push.js · sync).
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const old = event.oldSubscription;
+    const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const key = old?.options?.applicationServerKey;
+    if (!old || !key) return;
+    const sub = event.newSubscription || await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    await fetch(new URL('api/push/renew', scope), {
+      method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ old_endpoint: old.endpoint, old_auth: b64(old.getKey('auth')), endpoint: sub.endpoint, p256dh: b64(sub.getKey('p256dh')), auth: b64(sub.getKey('auth')) }),
+    }).catch(() => {});
   })());
 });

@@ -18,6 +18,15 @@ use Borealis\Services\Workspaces;
 
 final class WorkspaceApi
 {
+    /** 1.14 · new secret for /cron/run (the old address stops working). Installation administration only. */
+    public function rotateCronToken(Request $r): Response
+    {
+        if (!(int)(\Borealis\Core\Auth::user()['is_instance_admin'] ?? 0)) throw \Borealis\Core\HttpException::forbidden('Solo la administración de la instalación.');
+        \Borealis\Services\Scheduler::rotateToken();
+        \Borealis\Services\Activity::log('settings', 'settings', null, 'Generó una dirección nueva para la tarea programada (/cron/run)', null, null, [], null, ['category' => 'settings']);
+        return Response::ok(['redirect' => url('/admin/notifications')], 'Dirección nueva generada: actualiza la tarea programada');
+    }
+
     public function switch(Request $r): Response
     {
         Workspaces::switchTo((int)$r->input('workspace_id'));

@@ -56,6 +56,13 @@ final class ToolsApi
         return Response::ok(['removed' => $n], $n ? 'Notificaciones desactivadas en este dispositivo' : 'Este dispositivo no tenía notificaciones activadas');
     }
 
+    /** 1.14 · public: the service worker renews a subscription the browser replaced (see Push::renew). */
+    public function renew(Request $r): Response
+    {
+        if (!Push::renew($r->input())) throw HttpException::forbidden('No se reconoce la suscripción anterior.');
+        return Response::ok([], '');
+    }
+
     /** «Enviar una prueba»: one message to each device of the person, right now. */
     public function test(Request $r): Response
     {

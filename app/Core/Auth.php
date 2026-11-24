@@ -63,7 +63,7 @@ final class Auth
     /** Command line only (bin/notify.php): acts as one person to prepare their reminders. */
     public static function actAs(array $u): void
     {
-        if (PHP_SAPI !== 'cli') throw new \LogicException('Auth::actAs solo desde la consola.');
+        if (PHP_SAPI !== 'cli' && !\Borealis\Services\Scheduler::running()) throw new \LogicException('Auth::actAs solo desde la consola o la tarea programada.');
         $u['prefs'] = is_array($u['prefs'] ?? null) ? $u['prefs'] : (json_decode((string)($u['prefs'] ?? ''), true) ?: []);
         self::$user = $u;
         self::$resolved = true;

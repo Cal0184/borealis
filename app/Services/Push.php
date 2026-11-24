@@ -76,11 +76,41 @@ final class Push
         $u = parse_url($v['endpoint']);
         if (($u['scheme'] ?? '') !== 'https' && !self::testEndpoint($v['endpoint'])) throw HttpException::invalid(['endpoint' => 'La suscripción no es válida.']);
         if (strlen(self::b64d($v['p256dh'])) !== 65 || strlen(self::b64d($v['auth'])) !== 16) throw HttpException::invalid(['p256dh' => 'Las claves de la suscripción no son válidas.']);
+        $known = (bool)Database::get()->value('SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint_hash = ?', [Auth::id(), hash('sha256', $v['endpoint'])]);
         Database::get()->run('INSERT INTO push_subscriptions (user_id, endpoint, endpoint_hash, p256dh, auth, device, created_at) VALUES (?,?,?,?,?,?,?)
             ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), p256dh = VALUES(p256dh), auth = VALUES(auth), device = VALUES(device), failures = 0, last_error = NULL',
             [Auth::id(), $v['endpoint'], hash('sha256', $v['endpoint']), $v['p256dh'], $v['auth'], $v['device'] ? mb_substr($v['device'], 0, 120) : null, now()]);
+        // 1.14: activating a device turns on the person's «notifications on devices» switch (server side,
+        // so it no longer depends on the profile form being saved after the browser's permission).
+        $prefs = Auth::user()['prefs'] ?? [];
+        if (empty($prefs['notify']['push']) && array_key_exists('notify', $prefs)) {
+            $prefs['notify']['push'] = true;
+            Database::get()->update('users', ['prefs' => json_encode($prefs), 'updated_at' => now()], 'id = ?', [Auth::id()]);
+            Auth::reset();
+            Notifications::forgetPrefs((int)Auth::id());
+        }
         // A new device receives what happens from now on, not a burst of the day's earlier notices.
-        Database::get()->run('UPDATE notifications SET pushed_at = ? WHERE user_id = ? AND pushed_at IS NULL', [now(), Auth::id()]);
+        // (1.14: the daily check of a device that was already known changes nothing here.)
+        if (!$known) Database::get()->run('UPDATE notifications SET pushed_at = ? WHERE user_id = ? AND pushed_at IS NULL', [now(), Auth::id()]);
+    }
+
+    /**
+     * 1.14 · the browser replaced its subscription by itself (service worker «pushsubscriptionchange»),
+     * possibly with nobody signed in. Proof that it is the same device: the old endpoint and its old
+     * «auth» secret, which only that browser and Borealis know. Returns false when they do not match.
+     */
+    public static function renew(array $input): bool
+    {
+        $v = Validator::check($input, ['old_endpoint' => 'required,string,max:1000', 'old_auth' => 'required,string,max:100', 'endpoint' => 'required,string,max:1000', 'p256dh' => 'required,string,max:200', 'auth' => 'required,string,max:100']);
+        $db = Database::get();
+        $row = $db->one('SELECT * FROM push_subscriptions WHERE endpoint_hash = ?', [hash('sha256', $v['old_endpoint'])]);
+        if (!$row || !hash_equals((string)$row['auth'], $v['old_auth'])) return false;
+        $u = parse_url($v['endpoint']);
+        if ((($u['scheme'] ?? '') !== 'https' && !self::testEndpoint($v['endpoint'])) || strlen(self::b64d($v['p256dh'])) !== 65 || strlen(self::b64d($v['auth'])) !== 16) return false;
+        $db->run('DELETE FROM push_subscriptions WHERE endpoint_hash = ? AND id <> ?', [hash('sha256', $v['endpoint']), $row['id']]);
+        $db->run('UPDATE push_subscriptions SET endpoint = ?, endpoint_hash = ?, p256dh = ?, auth = ?, failures = 0, last_error = NULL WHERE id = ?',
+            [$v['endpoint'], hash('sha256', $v['endpoint']), $v['p256dh'], $v['auth'], $row['id']]);
+        return true;
     }
 
     public static function unsubscribe(?string $endpoint): int
@@ -117,16 +147,26 @@ final class Push
         });
     }
 
+    /** Minutes to wait before each retry of a message the push service did not accept for a passing reason. */
+    public const RETRY_MINUTES = [5, 15, 60, 180];
+
+    /** Result of the last deliver(): ['code' => int, 'error' => ?string, 'kind' => ok|gone|retry|failed]. */
+    public static array $last = [];
+
     /**
      * Offers each pending notice (last 24 h, not yet offered) to every device of the person, if they
      * want that category on their phone. Returns how many messages were delivered to a push service.
      * 1.9: during the person's quiet hours nothing is sent (the notices wait, unclaimed, and go out
      * when the quiet hours end); notices whose task was completed or whose date changed are dropped;
      * more than three at once become a single «N avisos nuevos» message.
+     * 1.14: every message to every device is written to notification_deliveries (one row per notice
+     * and device, UNIQUE, so it is never sent twice), with its error; a passing failure (no network,
+     * 429, 5xx) is retried by the scheduled job (retryDue) instead of being lost.
      */
     public static function flush(?int $userId = null): int
     {
         $db = Database::get();
+        $log = Scheduler::ready();
         $sql = 'SELECT n.* FROM notifications n WHERE n.pushed_at IS NULL AND n.read_at IS NULL AND n.created_at >= ?' . ($userId ? ' AND n.user_id = ?' : '') . ' ORDER BY n.id LIMIT 500';
         $rows = $db->all($sql, $userId ? [gmdate('Y-m-d H:i:s', time() - 86400), $userId] : [gmdate('Y-m-d H:i:s', time() - 86400)]);
         $byUser = [];
@@ -145,20 +185,104 @@ final class Push
             if (!$out) continue;
             $subs = $db->all('SELECT * FROM push_subscriptions WHERE user_id = ?', [$uid]);
             if (count($out) > 3) {
-                $payload = json_encode(['title' => 'Borealis', 'body' => count($out) . ' avisos nuevos: ' . mb_substr($out[count($out) - 1]['message'], 0, 120) . '…', 'url' => url('/notifications'),
-                    'tag' => 'borealis-grupo', 'id' => (int)$out[count($out) - 1]['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                foreach ($subs as $sub) if (self::deliver($sub, $payload, 'normal')) $sent++;
+                $last = $out[count($out) - 1];
+                $payload = self::groupPayload(count($out), $last);
+                foreach ($subs as $sub) if (self::send($sub, $last, $payload, 'normal', $log)) $sent++;
                 continue;
             }
             foreach ($out as $n) {
-                $payload = json_encode(['title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'], 'url' => $n['url'] ?: url('/notifications'),
-                    'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                foreach ($subs as $sub) {
-                    if (self::deliver($sub, $payload, in_array($n['type'], ['overdue', 'due', 'assigned'], true) ? 'high' : 'normal')) $sent++;
-                }
+                $payload = self::payload($n);
+                foreach ($subs as $sub) if (self::send($sub, $n, $payload, self::urgency($n), $log)) $sent++;
             }
         }
         return $sent;
+    }
+
+    private static function urgency(array $n): string
+    {
+        return in_array($n['type'], ['overdue', 'due', 'assigned'], true) ? 'high' : 'normal';
+    }
+
+    public static function payload(array $n): string
+    {
+        return json_encode(['title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'], 'url' => $n['url'] ?: url('/notifications'),
+            'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private static function groupPayload(int $count, array $last): string
+    {
+        return json_encode(['title' => 'Borealis', 'body' => $count . ' avisos nuevos: ' . mb_substr($last['message'], 0, 120) . '…', 'url' => url('/notifications'),
+            'tag' => 'borealis-grupo', 'id' => (int)$last['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** One notice to one device, recorded once in notification_deliveries (when the 1.14 table exists). */
+    private static function send(array $sub, array $n, string $payload, string $urgency, bool $log): bool
+    {
+        $db = Database::get();
+        if ($log) {
+            $ins = $db->run('INSERT IGNORE INTO notification_deliveries (notification_id, subscription_id, user_id, state, attempts, created_at, updated_at) VALUES (?,?,?,?,0,?,?)',
+                [$n['id'], $sub['id'], $sub['user_id'], 'sending', now(), now()])->rowCount();
+            if ($ins !== 1) return false; // already offered to this device
+        }
+        $ok = self::deliver($sub, $payload, $urgency);
+        if ($log) self::record((int)$n['id'], (int)$sub['id'], 1);
+        return $ok;
+    }
+
+    /** Writes the outcome of the last deliver() on the delivery row and plans the next attempt. */
+    private static function record(int $notificationId, int $subId, int $attempt): void
+    {
+        $l = self::$last;
+        $state = $l['kind'];
+        $next = null;
+        if ($state === 'retry') {
+            if ($attempt > count(self::RETRY_MINUTES)) $state = 'failed';
+            else $next = gmdate('Y-m-d H:i:s', time() + 60 * self::RETRY_MINUTES[$attempt - 1]);
+        }
+        Database::get()->run('UPDATE notification_deliveries SET state = ?, attempts = ?, last_code = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE notification_id = ? AND subscription_id = ?',
+            [$state === 'ok' ? 'sent' : $state, $attempt, $l['code'] ?: null, $l['error'] ? mb_substr((string)$l['error'], 0, 255) : null, $next, now(), $notificationId, $subId]);
+    }
+
+    /**
+     * 1.14: sends again the messages whose last attempt failed for a passing reason and whose next
+     * attempt is due. Not when the notice was read meanwhile, its task is done, the date changed, or
+     * the person is in quiet hours (it waits). Returns how many were accepted this time.
+     */
+    public static function retryDue(): int
+    {
+        $db = Database::get();
+        $rows = $db->all("SELECT d.notification_id, d.subscription_id, d.attempts, n.* FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
+            WHERE d.state = 'retry' AND d.next_attempt_at <= ? ORDER BY d.next_attempt_at LIMIT 200", [now()]);
+        $ok = 0;
+        foreach ($rows as $r) {
+            $uid = (int)$r['user_id'];
+            if (UserTime::isQuiet($uid)) continue;
+            $sub = $db->one('SELECT * FROM push_subscriptions WHERE id = ?', [$r['subscription_id']]);
+            if (!$sub || $r['read_at'] || !Notifications::stillRelevant($r) || strtotime($r['created_at'] . ' UTC') < time() - 86400) {
+                $db->run("UPDATE notification_deliveries SET state = 'failed', next_attempt_at = NULL, last_error = ?, updated_at = ? WHERE notification_id = ? AND subscription_id = ?",
+                    [$sub ? 'Ya no hacía falta: el aviso se leyó, la tarea cambió o pasaron 24 horas.' : 'El dispositivo ya no tiene notificaciones activadas.', now(), $r['notification_id'], $r['subscription_id']]);
+                continue;
+            }
+            // claim it, so two runs never retry the same message
+            if ($db->run("UPDATE notification_deliveries SET state = 'sending', updated_at = ? WHERE notification_id = ? AND subscription_id = ? AND state = 'retry'", [now(), $r['notification_id'], $r['subscription_id']])->rowCount() !== 1) continue;
+            $n = $r;
+            $n['id'] = $r['notification_id'];
+            if (self::deliver($sub, self::payload($n), self::urgency($n))) $ok++;
+            self::record((int)$r['notification_id'], (int)$r['subscription_id'], (int)$r['attempts'] + 1);
+        }
+        return $ok;
+    }
+
+    /** Deliveries of the last days for Administración › Notificaciones (counts and last errors). */
+    public static function deliveryStats(int $days = 7): array
+    {
+        $db = Database::get();
+        $since = gmdate('Y-m-d H:i:s', time() - $days * 86400);
+        $counts = array_column($db->all('SELECT state, COUNT(*) AS n FROM notification_deliveries WHERE created_at >= ? GROUP BY state', [$since]), 'n', 'state');
+        $errors = $db->all("SELECT d.state, d.attempts, d.last_code, d.last_error, d.updated_at, d.next_attempt_at, u.name AS user_name, s.device FROM notification_deliveries d
+            JOIN users u ON u.id = d.user_id LEFT JOIN push_subscriptions s ON s.id = d.subscription_id
+            WHERE d.created_at >= ? AND d.state IN ('retry','failed') ORDER BY d.updated_at DESC LIMIT 10", [$since]);
+        return ['counts' => array_map('intval', $counts), 'errors' => $errors];
     }
 
     /** One encrypted message to one device. Removes subscriptions the push service says are gone. */
@@ -177,15 +301,20 @@ final class Push
         $db = Database::get();
         if ($code >= 200 && $code < 300) {
             $db->run('UPDATE push_subscriptions SET last_ok_at = ?, last_error = NULL, failures = 0 WHERE id = ?', [now(), $sub['id']]);
+            self::$last = ['code' => $code, 'error' => null, 'kind' => 'ok'];
             return true;
         }
         if ($code === 404 || $code === 410) { // the device unsubscribed or the browser was reset
             $db->run('DELETE FROM push_subscriptions WHERE id = ?', [$sub['id']]);
+            self::$last = ['code' => $code, 'error' => 'El navegador ya no tiene esta suscripción (se quitó el dispositivo).', 'kind' => 'gone'];
             return false;
         }
         $msg = $code ? "El servicio de notificaciones respondió $code" . (is_string($res) && $res !== '' ? ': ' . mb_substr(strip_tags($res), 0, 120) : '') : 'Sin conexión con el servicio de notificaciones: ' . $err;
+        // 401/403: the VAPID keys changed (storage/vapid.json replaced) — the device has to be activated again.
+        if ($code === 401 || $code === 403) $msg .= ' (las claves del servidor cambiaron: vuelve a activar las notificaciones en ese dispositivo)';
         $db->run('UPDATE push_subscriptions SET last_error = ?, failures = failures + 1 WHERE id = ?', [mb_substr($msg, 0, 255), $sub['id']]);
         $db->run('DELETE FROM push_subscriptions WHERE id = ? AND failures >= 20', [$sub['id']]);
+        self::$last = ['code' => $code, 'error' => $msg, 'kind' => ($code === 0 || $code === 408 || $code === 429 || $code >= 500) ? 'retry' : 'failed'];
         return false;
     }
 

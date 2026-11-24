@@ -92,7 +92,9 @@ final class Notifications
             $hm = fn($v, $d) => is_string($v) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v) ? $v : $d;
             self::$prefsCache[$userId] = [
                 'off' => array_values(array_unique($off)),
-                'push' => !empty($n['push']),
+                // 1.14: on unless the person turned it off. Before, it was off until the profile form was saved
+                // with «Activar», so a device could be subscribed while its owner's notices were dropped.
+                'push' => array_key_exists('push', $n) ? !empty($n['push']) : true,
                 'push_off' => array_values(array_intersect((array)$pushOff, array_keys(self::CATEGORIES))),
                 'lead' => $lead,
                 'before' => $before,

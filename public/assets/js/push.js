@@ -1,7 +1,7 @@
 // Mobile and desktop notifications (1.8) with the browser's standard Web Push.
 // Registers the service worker (sw.js, needed also to install Borealis on the Home Screen),
 // asks for permission only when the person presses «Activar», and keeps the server informed.
-import { api, basePath, onInit, toast } from './core.js?v=1.13.0';
+import { api, basePath, onInit, toast } from './core.js?v=1.14.0';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -23,6 +23,51 @@ async function current() {
   const reg = await registration();
   return reg ? reg.pushManager.getSubscription() : null;
 }
+
+// 1.14 · keep the server in step with this browser, without asking anything:
+//  - the browser has a subscription → tell the server once a day (it may have dropped it, or the
+//    person's switch was off), so notices keep arriving while Borealis is closed;
+//  - permission was given here before but the subscription is gone (browser reset, new keys) →
+//    subscribe again silently (no prompt: the permission is already granted).
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+const subBody = (sub) => ({ endpoint: sub.endpoint, p256dh: bytesToB64(sub.getKey('p256dh')), auth: bytesToB64(sub.getKey('auth')), device: deviceName() });
+async function sync() {
+  if (!window.isSecureContext || !supported() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await registration();
+    if (!reg) return;
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub && store.get('borealis-push') === '1') {
+      const { key } = await api('/api/push/key', { method: 'GET' });
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+      store.set('borealis-push-sync', '');
+    }
+    if (!sub) return;
+    const day = new Date().toISOString().slice(0, 10) + '|' + sub.endpoint.slice(-24);
+    if (store.get('borealis-push-sync') === day) return;
+    await api('/api/push/subscription', { body: { ...subBody(sub), sync: 1 } });
+    store.set('borealis-push-sync', day);
+    store.set('borealis-push', '1');
+  } catch { /* offline or signed out: next visit */ }
+}
+sync();
+
+// 1.14 · a short invitation (only on Inicio) the first time, while the browser has not been asked.
+onInit((root) => {
+  root.querySelectorAll?.('[data-push-nudge]').forEach((el) => {
+    if (el.dataset.ready) return;
+    el.dataset.ready = '1';
+    const show = window.isSecureContext && supported() && Notification.permission === 'default' && store.get('borealis-push-nudge') !== 'no';
+    el.hidden = !show;
+    el.querySelector('[data-push-nudge-on]')?.addEventListener('click', async () => {
+      const box = { querySelector: () => null };
+      el.hidden = true;
+      await enable(box);
+    });
+    el.querySelector('[data-push-nudge-off]')?.addEventListener('click', () => { store.set('borealis-push-nudge', 'no'); el.hidden = true; });
+  });
+});
 
 async function paint(box) {
   const st = box.querySelector('[data-push-status]');
@@ -52,16 +97,20 @@ async function enable(box) {
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
-    await api('/api/push/subscription', { body: { endpoint: sub.endpoint, p256dh: bytesToB64(sub.getKey('p256dh')), auth: bytesToB64(sub.getKey('auth')), device: deviceName() } });
-    box.querySelector('[data-push-flag]').value = '1';
-    box.querySelector('[data-push-cats]').hidden = false;
-    box.dataset.hasDevices = '1';
-    box.closest('form')?.requestSubmit();
+    await api('/api/push/subscription', { body: subBody(sub) });
+    store.set('borealis-push', '1');
+    const flag = box.querySelector('[data-push-flag]');
+    if (flag) flag.value = '1';
+    const cats = box.querySelector('[data-push-cats]');
+    if (cats) cats.hidden = false;
+    if (box.dataset) box.dataset.hasDevices = '1';
+    // the server already turned the switch on (1.14); saving the form only keeps the page in step
+    if (flag) box.closest?.('form')?.requestSubmit();
     toast('Notificaciones activadas en este dispositivo');
   } catch (e) {
     toast(e.message || 'No se pudieron activar las notificaciones.', { type: 'error' });
   }
-  paint(box);
+  if (box.dataset) paint(box);
 }
 
 async function disable(box) {
@@ -69,6 +118,7 @@ async function disable(box) {
   try {
     await api('/api/push/unsubscribe', { body: { endpoint: sub?.endpoint || '' } });
     await sub?.unsubscribe();
+    store.set('borealis-push', '0');
     toast('Notificaciones desactivadas en este dispositivo');
   } catch (e) { toast(e.message, { type: 'error' }); }
   paint(box);

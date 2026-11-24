@@ -23,6 +23,12 @@ final class Policy
         self::$projectCache = [];
     }
 
+    /** 1.14: drop the cached permissions of one project (after adding a member in the same request). */
+    public static function forgetProject(int $projectId): void
+    {
+        unset(self::$projectCache[$projectId]);
+    }
+
     /** Current workspace membership: ['id','name','role_key','role_name','perms'=>[...]] */
     public static function workspace(): array
     {
@@ -47,7 +53,7 @@ final class Policy
     /** Command line only: the workspace of the person set with Auth::actAs. */
     public static function useWorkspace(int $wsId): void
     {
-        if (PHP_SAPI !== 'cli') throw new \LogicException('Policy::useWorkspace solo desde la consola.');
+        if (PHP_SAPI !== 'cli' && !\Borealis\Services\Scheduler::running()) throw new \LogicException('Policy::useWorkspace solo desde la consola o la tarea programada.');
         self::$workspace = null;
         self::$projectCache = [];
         $db = Database::get();
