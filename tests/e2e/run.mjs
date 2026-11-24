@@ -1112,7 +1112,7 @@ await attempt('Crear cuenta con horas semanales y enlace correcto', async () => 
 await attempt('«Calendario» en el menú lateral', async () => {
   await page.goto(BASE + '/calendar');
   const item = page.locator('.sidebar a.nav-item[href$="/calendar"]');
-  check('Escritorio: «Calendario» con su icono, marcado al estar en la sección', (await item.getAttribute('aria-current')) === 'page' && (await item.locator('svg use').getAttribute('href')).includes('calendar') && (await item.textContent()).trim() === 'Calendario');
+  check('Escritorio: «Calendario» con su icono, marcado al estar en la sección', (await item.getAttribute('aria-current')) === 'page' && (await item.locator('svg use').getAttribute('href')).includes('calendar') && (await item.textContent()).trim() === 'Mi calendario'); // 1.15: «Mi espacio › Mi calendario»
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(BASE + '/');
   await page.locator('[data-sidebar-toggle], .sidebar-toggle, button[aria-controls="sidebar"]').first().click();
@@ -1279,7 +1279,7 @@ await attempt('Calendario personal y de equipo', async () => {
 await attempt('Notificaciones configurables', async () => {
   await page.goto(BASE + '/profile#notificaciones');
   const form = page.locator('[data-notify-form]');
-  check('Perfil › Notificaciones: categorías, anticipación y móvil', await form.isVisible() && await form.locator('input[name="in_app[]"]').count() === 11 && await page.locator('[data-push-box]').isVisible());
+  check('Perfil › Notificaciones: categorías, anticipación y móvil', await form.isVisible() && await form.locator('input[name="in_app[]"]').count() === 13 /* 1.15: + tareas que sigues, automatizaciones */ && await page.locator('[data-push-box]').isVisible());
   await form.locator('input[name="in_app[]"][value="capacity"]').uncheck();
   await form.locator('input[name="before[]"][value="2880"], input[name="before[]"][value="4320"]').first().check();
   const resp = page.waitForResponse((r) => r.url().includes('/api/profile/notifications'));
@@ -1292,7 +1292,7 @@ await attempt('Notificaciones configurables', async () => {
   await page.reload();
   check('Al volver, la elección sigue ahí', !(await form.locator('input[name="in_app[]"][value="capacity"]').isChecked()) && await form.locator('input[name="before[]"][value="4320"]').isChecked());
   await page.goto(BASE + '/notifications');
-  check('El centro de notificaciones filtra por tipo', await page.locator('.notif-cats .chip').count() === 12);
+  check('El centro de notificaciones filtra por tipo', await page.locator('.notif-cats .chip').count() === 14); // 1.15: two new categories
   await page.screenshot({ path: `${SHOTS}/31-centro-notificaciones.png` });
   check('La campana tiene contador o queda sin número cuando no hay pendientes', await page.locator('[data-tour="notifications"]').isVisible());
 });
@@ -1617,7 +1617,7 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   check('Al finalizar con 12 h de 5 h estimadas se informa +7 h (+140 %)', done.data?.deviation?.pct === 140, JSON.stringify(done.data?.deviation));
   await apiCall('/api/monitoring/scan', 'POST', {});
   await page.goto(BASE + '/monitoring');
-  check('El menú lleva a «Monitoreo»', await page.locator('.nav-item[aria-current="page"]', { hasText: 'Monitoreo' }).isVisible());
+  check('El menú lleva a «Monitoreo»', await page.locator('.nav-item[aria-current="page"]', { hasText: 'Carga y alertas' }).isVisible()); // 1.15: «Seguimiento › Carga y alertas»
   check('El resumen muestra los indicadores enlazados y el estado de cada proyecto', await page.locator('.mon-kpis a.stat').count() === 8 && await page.locator('.mon-health li').count() >= 1);
   await page.screenshot({ path: `${SHOTS}/40-monitoreo-resumen.png`, fullPage: true });
   await page.locator('.mon-kpis a[data-kpi="late"]').click();
@@ -1909,6 +1909,7 @@ await attempt('1.14 · Auditoría, notificaciones y análisis por período', asy
   await page.screenshot({ path: `${SHOTS}/56-analisis-periodo.png`, fullPage: true });
 });
 
+section('Novedades 1.15');
 await attempt('1.15 · Confirmaciones que no bloquean y avisos con un formulario abierto', async () => {
   const dialogs = [];
   const onDlg = (d) => { dialogs.push(d.type()); d.dismiss().catch(() => {}); };
@@ -1959,7 +1960,7 @@ await attempt('1.15 · Barra lateral por áreas, favoritos y búsqueda rápida',
   await page.screenshot({ path: `${SHOTS}/57-barra-compacta.png` });
   await page.click('[data-nav-compact]');
   await page.waitForTimeout(600);
-  await page.goto(projectUrl);
+  await page.goto(projectUrl.startsWith('http') ? projectUrl : BASE + projectUrl);
   await page.click('[data-favorite^="project:"]');
   await waitToast(/favoritos/);
   await page.reload();
@@ -1989,7 +1990,9 @@ await attempt('1.15 · Vistas de tareas y detalle en tres zonas', async () => {
   check('Abrir desde la lista muestra el panel lateral con Seguir, propiedades y progreso', await page.locator('#drawer [data-watch]').isVisible() && await page.locator('#drawer [data-progress]').count() === 1);
   await page.screenshot({ path: `${SHOTS}/61-detalle-tres-zonas.png` });
   await page.keyboard.press('Escape');
-  check('Al cerrar el panel se queda en la misma vista', new URL(page.url()).searchParams.get('tab') === 'team' && await page.locator('.task-compact').count() === 1);
+  await page.waitForFunction(() => !document.querySelector('#drawer.open'), null, { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  check('Al cerrar el panel se queda en la misma vista', new URL(page.url()).searchParams.get('tab') === 'team' && await page.locator('.task-compact').count() >= 1 && !(await page.locator('#drawer.open').count()));
 });
 
 await attempt('1.15 · Registro maestro y automatizaciones', async () => {
@@ -2019,7 +2022,7 @@ for (const [vname, [w, h]] of Object.entries(viewports)) {
   check(`${vname} ${w}×${h}: sin desplazamiento horizontal de página`, overflow.length === 0, overflow.join(', '));
   if (w < 900) {
     await page.goto(BASE + '/');
-    const toggle = page.locator('[data-sidebar-toggle]');
+    const toggle = page.locator('.topbar [data-sidebar-toggle]');
     check(`${vname}: menú lateral accesible con botón`, await toggle.isVisible());
     await toggle.click();
     await page.waitForTimeout(300);
