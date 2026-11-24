@@ -60,15 +60,56 @@ final class AdminController
     public function audit(Request $r): Response
     {
         $this->guard('audit.view');
-        $where = 'a.workspace_id = ?';
-        $params = [Policy::wsId()];
-        if ($r->q('user_id')) { $where .= ' AND a.user_id = ?'; $params[] = (int)$r->q('user_id'); }
-        if ($r->q('type')) { $where .= ' AND a.entity_type = ?'; $params[] = (string)$r->q('type'); }
+        $f = self::auditFilters($r);
         $page = max(1, (int)$r->q('page', 1));
-        $params[] = 51;
-        $params[] = ($page - 1) * 50;
-        $rows = Database::get()->all("SELECT a.*, u.name AS user_name, u.avatar_color, p.name AS project_name FROM activity a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN projects p ON p.id = a.project_id WHERE $where ORDER BY a.id DESC LIMIT ? OFFSET ?", $params);
-        return View::page('admin/audit', $this->base('audit') + ['rows' => array_slice($rows, 0, 50), 'hasMore' => count($rows) > 50, 'page' => $page, 'members' => Workspaces::members(), 'filters' => $r->query]);
+        $rows = \Borealis\Services\Activity::search($f, 51, ($page - 1) * 50);
+        $verify = $r->q('verify') ? \Borealis\Services\Activity::verify() : null;
+        $projects = Database::get()->all('SELECT id, name, project_key FROM projects WHERE workspace_id = ? ORDER BY name', [Policy::wsId()]);
+        return View::page('admin/audit', $this->base('audit') + ['rows' => array_slice($rows, 0, 50), 'hasMore' => count($rows) > 50, 'page' => $page, 'members' => Workspaces::members(),
+            'filters' => array_filter($f, fn($v) => $v !== null && $v !== ''), 'projects' => $projects, 'actions' => \Borealis\Services\Activity::actions(), 'verify' => $verify]);
+    }
+
+    /** 1.14 · the same search as a CSV file (opens in Excel / LibreOffice / Google Sheets). */
+    public function auditCsv(Request $r): Response
+    {
+        $this->guard('audit.view');
+        $rows = \Borealis\Services\Activity::search(self::auditFilters($r), 5000, 0);
+        $out = fopen('php://temp', 'w+');
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['Fecha (UTC)', 'Persona', 'Categoría', 'Acción', 'Resumen', 'Proyecto', 'Antes', 'Después', 'Motivo', 'Origen'], ';');
+        foreach ($rows as $a) fputcsv($out, [$a['created_at'], $a['user_name'] ?? 'Sistema', \Borealis\Services\Activity::CATEGORIES[$a['category'] ?? ''] ?? '', $a['action'], $a['summary'], $a['project_name'] ?? '', $a['before_data'] ?? '', $a['after_data'] ?? '', $a['reason'] ?? '', \Borealis\Services\Activity::SOURCES[$a['source'] ?? ''] ?? ''], ';');
+        rewind($out);
+        $csv = (string)stream_get_contents($out);
+        return new Response($csv, 200, ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="borealis-historial-' . date('Y-m-d') . '.csv"', 'Cache-Control' => 'no-store']);
+    }
+
+    private static function auditFilters(Request $r): array
+    {
+        $f = [];
+        foreach (['user_id', 'project_id', 'category', 'action', 'source', 'from', 'to', 'q', 'type'] as $k) $f[$k] = is_scalar($r->q($k)) ? trim((string)$r->q($k)) : null;
+        // quick periods: hoy, 7 / 30 / 90 días, or this week, month, quarter or year (the same as Análisis)
+        $f['period'] = null;
+        if (is_string($r->q('period')) && $r->q('period') !== '') {
+            $pp = (string)$r->q('period');
+            $days = ['today' => 0, '7d' => 6, '30d' => 29, '90d' => 89][$pp] ?? null;
+            $range = $days !== null ? [date('Y-m-d', strtotime(today() . " -$days days")), today()] : \Borealis\Services\Analysis\Analysis::preset($pp);
+            if ($range) { [$f['from'], $f['to']] = $range; $f['period'] = $pp; }
+        }
+        return $f;
+    }
+
+    /** 1.14 · Administración › Notificaciones: does the scheduled job run, and are notices delivered. */
+    public function notifications(Request $r): Response
+    {
+        $this->guard('workspace.manage');
+        $admin = (bool)(int)(Auth::user()['is_instance_admin'] ?? 0);
+        return View::page('admin/notifications', $this->base('notifications') + [
+            'job' => \Borealis\Services\Scheduler::status(), 'stats' => \Borealis\Services\Push::deliveryStats(),
+            'pushOk' => \Borealis\Services\Push::available(), 'mailOk' => \Borealis\Services\Mailer::configured(),
+            'cronUrl' => $admin ? absolute_url('/cron/run', ['token' => \Borealis\Services\Scheduler::token()]) : null, 'isInstanceAdmin' => $admin,
+            'devices' => (int)Database::get()->value('SELECT COUNT(*) FROM push_subscriptions s JOIN workspace_members wm ON wm.user_id = s.user_id AND wm.workspace_id = ?', [Policy::wsId()]),
+            'basePath' => BASE_PATH, 'phpBinary' => PHP_BINARY, 'phpVersion' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+        ]);
     }
 
     public function data(Request $r): Response

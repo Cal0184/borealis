@@ -87,6 +87,11 @@ final class GoogleCalendar
         $tot = ['calendars' => count($cals), 'created' => 0, 'updated' => 0, 'removed' => 0];
         try {
             foreach ($cals as $c) foreach (self::sync($c) as $k => $n) $tot[$k] += $n;
+            // 1.14: calendar history. Only how many events changed (no titles: they are the person's own calendar).
+            if ($tot['created'] + $tot['updated'] + $tot['removed'] > 0) {
+                Activity::log('google_sync', 'calendar', null, "Google Calendar sincronizó sus calendarios: {$tot['created']} eventos nuevos, {$tot['updated']} cambiados, {$tot['removed']} eliminados", null, null, [],
+                    null, ['category' => 'calendar', 'source' => 'google', 'after' => ['nuevos' => $tot['created'], 'cambiados' => $tot['updated'], 'eliminados' => $tot['removed']]]);
+            }
             Database::get()->update('google_accounts', ['last_sync_at' => now(), 'last_error' => null, 'status' => 'active', 'updated_at' => now()], 'id = ? AND status <> \'revoked\'', [$acc['id']]);
         } catch (GoogleError $e) {
             if (($acc = Google::account()) && $acc['status'] !== 'revoked') Google::fail((int)$acc['id'], 'error', $e->getMessage());

@@ -118,6 +118,8 @@ final class Workspaces
             if ($old !== null && $old !== $h) Capacity::keepHistory($userId, $old);
             $db->run('UPDATE workspace_members SET weekly_hours = ? WHERE workspace_id = ? AND user_id = ?', [$h, Policy::wsId(), $userId]);
         });
+        $old = $m['weekly_hours'] !== null ? (float)$m['weekly_hours'] : null;
+        if ($old !== $h) Activity::log('weekly_hours', 'member', $userId, "Cambió las horas semanales de {$m['name']}", null, null, [], null, ['before' => ['horas semanales' => $old], 'after' => ['horas semanales' => $h], 'category' => 'team']);
     }
 
     public static function isActiveMember(int $userId): bool
@@ -136,7 +138,7 @@ final class Workspaces
             self::assertAnotherOwner($userId);
         }
         Database::get()->update('workspace_members', ['role_id' => $roleId], 'workspace_id = ? AND user_id = ?', [Policy::wsId(), $userId]);
-        Activity::log('role_changed', 'user', $userId, "Cambió el rol de {$m['name']} a {$role['name']}");
+        Activity::log('role_changed', 'user', $userId, "Cambió el rol de {$m['name']} a {$role['name']}", null, null, [], null, ['before' => ['rol' => $m['role_name'] ?? null], 'after' => ['rol' => $role['name']], 'category' => 'permission']);
     }
 
     public static function setMemberStatus(int $userId, string $status): void
@@ -215,7 +217,8 @@ final class Workspaces
         if (!$data) return;
         $db->update('users', $data + ['updated_at' => now()], 'id = ?', [$userId]);
         $labels = ['name' => 'el nombre', 'email' => 'el correo', 'title' => 'el cargo'];
-        Activity::log('updated', 'user', $userId, 'Editó ' . implode(', ', array_map(fn($k) => $labels[$k], array_keys($data))) . ' de la cuenta de ' . $m['name']);
+        Activity::log('updated', 'user', $userId, 'Editó ' . implode(', ', array_map(fn($k) => $labels[$k], array_keys($data))) . ' de la cuenta de ' . $m['name'], null, null, [], null,
+            ['before' => array_intersect_key($m, $data), 'after' => $data, 'category' => 'team']);
     }
 
     public static function resetPassword(int $userId, string $password): void

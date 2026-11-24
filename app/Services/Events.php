@@ -186,7 +186,8 @@ final class Events
             return $id;
         });
         $label = $f['kind'] === 'meeting' ? 'la reunión' : 'el evento';
-        Activity::log('event_created', 'event', $id, "Creó $label «{$f['title']}»", $f['project_id'] ? (int)$f['project_id'] : null);
+        Activity::log('event_created', 'event', $id, "Creó $label «{$f['title']}» · " . self::when($f), $f['project_id'] ? (int)$f['project_id'] : null, null, [], null,
+            ['after' => self::auditView($f, $people), 'source' => $cal['source'] === 'google' ? 'web' : null, 'category' => 'calendar']);
         foreach ($people as $uid) {
             Notifications::send($uid, 'calendar', ($f['kind'] === 'meeting' ? 'Te invitaron a la reunión' : 'Te añadieron al evento') . " «{$f['title']}» · " . self::when($f), url('/calendar', ['date' => self::toLocal($f['starts_at'], 'Y-m-d'), 'event' => $id]), $f['project_id'] ? (int)$f['project_id'] : null, null, "ev-inv-$id-$uid");
         }
@@ -221,7 +222,16 @@ final class Events
             $before = array_map('intval', array_column($e['participants'], 'id'));
             foreach (array_diff($people, $before) as $uid) Notifications::send($uid, 'calendar', ($f['kind'] === 'meeting' ? 'Te invitaron a la reunión' : 'Te añadieron al evento') . " «{$f['title']}» · " . self::when($f), url('/calendar', ['date' => self::toLocal($f['starts_at'], 'Y-m-d'), 'event' => $id]), null, null, "ev-inv-$id-$uid");
         }
-        Activity::log('event_updated', 'event', $id, 'Cambió ' . ($f['kind'] === 'meeting' ? 'la reunión' : 'el evento') . " «{$f['title']}»", $f['project_id'] ? (int)$f['project_id'] : null);
+        // 1.14: calendar history with before and after; a new start is a «reprogramación»
+        $before = self::auditView($e, array_map('intval', array_column($e['participants'], 'id')));
+        $after = self::auditView($f + $e, $people ?? array_map('intval', array_column($e['participants'], 'id')));
+        $changed = array_keys(array_filter($after, fn($v, $k) => ($before[$k] ?? null) !== $v, ARRAY_FILTER_USE_BOTH));
+        $what = $f['kind'] === 'meeting' ? 'la reunión' : 'el evento';
+        $moved = in_array('inicio', $changed, true) || in_array('fin', $changed, true);
+        Activity::log($moved ? 'event_rescheduled' : (array_diff($changed, ['participantes']) ? 'event_updated' : 'event_participants'), 'event', $id,
+            ($moved ? 'Reprogramó ' . $what . " «{$f['title']}»: " . self::when($e) . ' → ' . self::when($f + $e) : (in_array('participantes', $changed, true) && count($changed) === 1 ? "Cambió los participantes de $what «{$f['title']}»" : "Cambió $what «{$f['title']}»")),
+            $f['project_id'] ? (int)$f['project_id'] : null, null, [], null,
+            ['before' => array_intersect_key($before, array_flip($changed)), 'after' => array_intersect_key($after, array_flip($changed)), 'reason' => $input['change_reason'] ?? null, 'category' => 'calendar']);
         return self::find($id);
     }
 
@@ -234,8 +244,18 @@ final class Events
         if ($e['source'] === 'google') GoogleCalendar::remove($db->one('SELECT * FROM calendars WHERE id = ?', [$e['calendar_id']]), $e);
         $db->update('events', $delete || $e['source'] === 'google' ? ['deleted_at' => now(), 'status' => 'cancelled', 'updated_at' => now()] : ['status' => 'cancelled', 'updated_at' => now()], 'id = ?', [$id]);
         $what = $e['kind'] === 'meeting' ? 'la reunión' : 'el evento';
-        Activity::log($delete ? 'event_deleted' : 'event_cancelled', 'event', $id, ($delete ? 'Eliminó ' : 'Canceló ') . "$what «{$e['title']}»", $e['project_id'] ? (int)$e['project_id'] : null);
+        Activity::log($delete ? 'event_deleted' : 'event_cancelled', 'event', $id, ($delete ? 'Eliminó ' : 'Canceló ') . "$what «{$e['title']}» (" . self::when($e) . ')', $e['project_id'] ? (int)$e['project_id'] : null, null, [], null,
+            ['before' => self::auditView($e, array_map('intval', array_column($e['participants'], 'id'))), 'category' => 'calendar']);
         foreach ($e['participants'] as $p) Notifications::send((int)$p['id'], 'calendar', 'Se canceló ' . $what . " «{$e['title']}» (" . self::when($e) . ')', url('/calendar', ['date' => self::toLocal($e['starts_at'], 'Y-m-d')]), null, null, "ev-cancel-$id-{$p['id']}");
+    }
+
+    /** 1.14: what the calendar history keeps of an event (no descriptions or links). */
+    private static function auditView(array $e, array $people): array
+    {
+        sort($people);
+        $names = $people ? Database::get()->column('SELECT name FROM users WHERE id IN (' . Database::in($people) . ') ORDER BY name', $people) : [];
+        return ['título' => $e['title'] ?? null, 'inicio' => isset($e['starts_at']) ? self::toLocal((string)$e['starts_at']) : null, 'fin' => isset($e['ends_at']) && $e['ends_at'] ? self::toLocal((string)$e['ends_at']) : null,
+            'todo el día' => !empty($e['all_day']), 'calendario' => (int)($e['calendar_id'] ?? 0) ?: null, 'participantes' => implode(', ', $names)];
     }
 
     public static function restore(int $id): void
@@ -243,6 +263,7 @@ final class Events
         $e = self::find($id);
         if (!$e['can_edit'] || $e['source'] === 'google') throw HttpException::forbidden('No puedes reactivar este evento.');
         Database::get()->update('events', ['status' => 'confirmed', 'updated_at' => now()], 'id = ?', [$id]);
+        Activity::log('event_restored', 'event', $id, 'Reactivó ' . ($e['kind'] === 'meeting' ? 'la reunión' : 'el evento') . " «{$e['title']}»", $e['project_id'] ? (int)$e['project_id'] : null, null, [], null, ['category' => 'calendar']);
     }
 
     /** «lun 3 nov, 10:00» in the installation's time zone. */
