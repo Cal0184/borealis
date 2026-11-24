@@ -31,4 +31,26 @@ final class CronController
         if (!empty($res['skipped'])) return $text('Ya hay otra ejecución en curso.', 200);
         return $text($res['summary'] . ($res['errors'] ? "\nErrores: " . implode(' · ', $res['errors']) : ''), $res['errors'] ? 500 : 200);
     }
+
+    /**
+     * 1.15 · POST /cron/tick: one beat of the internal engine. Answers 202 at once (the caller only
+     * waits for that), then works with the connection closed. Token and chain id come in headers.
+     */
+    public static function tick(Request $r): void
+    {
+        $text = function (string $s, int $code): void {
+            (new Response($s . "\n", $code, ['Content-Type' => 'text/plain; charset=utf-8', 'Cache-Control' => 'no-store', 'X-Robots-Tag' => 'noindex']))->send();
+        };
+        if ($r->method !== 'POST') { $text('Método no permitido.', 405); return; }
+        if (!Scheduler::ready() || (new Migrator(Database::get()->pdo))->pending()) { $text('Borealis necesita actualizar la base de datos.', 503); return; }
+        if (!Scheduler::checkToken((string)($r->header('X-Borealis-Token') ?? ''))) { $text('No autorizado.', 403); return; }
+        $chain = (string)($r->header('X-Borealis-Chain') ?? '');
+        if (!preg_match('/^[a-f0-9]{16}$/', $chain) || !\Borealis\Services\Heartbeat::enabled()) { $text('Sin efecto.', 409); return; }
+        ignore_user_abort(true);
+        @set_time_limit(0);
+        header('Connection: close');
+        $text('Latido recibido.', 202);
+        if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request(); else { @ob_end_flush(); @flush(); }
+        \Borealis\Services\Heartbeat::beat($chain);
+    }
 }

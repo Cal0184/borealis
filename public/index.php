@@ -18,6 +18,11 @@ if (!Config::isInstalled()) {
 
 // 1.14: the scheduled job by URL (/cron/run?token=…), without session or cookies.
 $request = Request::capture();
+// 1.15: one beat of the internal notification engine (see Services/Heartbeat.php).
+if ($request->path === '/cron/tick') {
+    try { Borealis\Controllers\CronController::tick($request); } catch (Throwable $e) { error_log('[Borealis] motor de avisos: ' . $e->getMessage()); }
+    exit;
+}
 if ($request->path === '/cron/run') {
     try { Borealis\Controllers\CronController::handle($request)->send(); } catch (Throwable $e) { error_log('[Borealis] cron: ' . $e->getMessage()); http_response_code(500); echo "Error\n"; }
     exit;

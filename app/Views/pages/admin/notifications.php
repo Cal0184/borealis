@@ -2,7 +2,8 @@
 /** 1.14 · Administración › Notificaciones */
 $st = $job['state'];
 $row = $job['row'];
-$labels = ['cli' => 'cron (php bin/notify.php)', 'http' => 'cron por dirección (/cron/run)', 'visit' => 'una visita a Borealis (respaldo)'];
+$labels = ['cli' => 'cron (php bin/notify.php)', 'http' => 'cron por dirección (/cron/run)', 'visit' => 'una visita a Borealis (respaldo)', 'engine' => 'el motor interno de Borealis'];
+$hb = \Borealis\Services\Heartbeat::status();
 $c = $stats['counts'];
 $cmd = 'cd ' . $basePath . ' && /usr/bin/php' . $phpVersion . ' bin/notify.php >> storage/logs/notify.log 2>&1';
 ?>
@@ -22,6 +23,19 @@ $cmd = 'cd ' . $basePath . ' && /usr/bin/php' . $phpVersion . ' bin/notify.php >
     <?php else: ?>
       <p class="notice notice--danger"><?= icon('alert', 'sm') ?> La última ejecución terminó con errores: <?= e($row['last_error']) ?></p>
     <?php endif; ?>
+    <div class="engine-box" data-engine="<?= $hb['alive'] ? 'on' : ($hb['cron'] ? 'cron' : ($hb['enabled'] ? 'off' : 'unavailable')) ?>">
+      <h3 class="small-title"><?= icon('repeat', 'sm') ?> Motor interno de avisos <span class="muted small">(1.15)</span></h3>
+      <?php if ($hb['alive']): ?>
+        <p class="small"><span class="badge success">Funcionando</span> Último latido hace <?= (int)$hb['seconds'] ?> s · <?= (int)$hb['ticks'] ?> latidos desde <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$hb['since']))) ?>. Los avisos llegan aunque nadie tenga Borealis abierto ni haya iniciado sesión.</p>
+      <?php elseif ($hb['cron']): ?>
+        <p class="small"><span class="badge">En reposo</span> La tarea programada del servidor ya se ejecuta, así que el motor interno no hace falta. Si el cron deja de funcionar, el motor vuelve a arrancar solo.</p>
+      <?php elseif ($hb['enabled']): ?>
+        <p class="small"><span class="badge warn">Detenido</span> <?= $hb['error'] ? 'No pudo llamarse a sí mismo: ' . e($hb['error']) . '.' : 'Arranca con la próxima visita a cualquier página.' ?> Revisa que el servidor pueda abrir su propia dirección (<code><?= e(\Borealis\Services\Heartbeat::tickUrl()) ?></code>) o configura la tarea programada.</p>
+      <?php else: ?>
+        <p class="small"><span class="badge">No disponible</span> <?= $hb['fpm'] ? 'Desactivado en config/config.php (cron.heartbeat).' : 'Este servidor no ejecuta PHP con PHP-FPM; usa la tarea programada.' ?></p>
+      <?php endif; ?>
+      <p class="small muted">El motor mantiene los avisos funcionando sin configurar nada. La tarea programada sigue siendo lo más robusto: también funciona justo después de reiniciar el servidor, sin esperar una visita.</p>
+    </div>
     <?php if ($row && $row['last_summary']): ?><p class="small muted"><?= e($row['last_summary']) ?> · <?= (int)$row['runs'] ?> ejecuciones en total</p><?php endif; ?>
 
     <h3 class="mt">Configurar en HestiaCP</h3>

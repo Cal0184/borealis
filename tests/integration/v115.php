@@ -25,7 +25,7 @@ foreach (preg_split('/^-- @@\s*$/m', (string)file_get_contents($root . '/databas
     try { $q($sql); } catch (PDOException $e) { if (!in_array((int)($e->errorInfo[1] ?? 0), [1060, 1061, 1050], true)) $errors[] = $e->getMessage(); }
 }
 check('La migración 017 se puede repetir sin errores', !$errors, implode(' | ', $errors));
-check('Versión 1.15.0', str_contains((string)file_get_contents($root . '/app/bootstrap.php'), "'1.15.0'"));
+check('Versión 1.15.1', str_contains((string)file_get_contents($root . '/app/bootstrap.php'), "'1.15.1'"));
 
 // ================================================================ notices while a page is open
 group('1.15 · Avisos con la página abierta');
@@ -260,3 +260,21 @@ $brokenNoBase = str_contains($admin->body, 'data-audit-verify="broken"');
 $q('UPDATE audit_chain SET base_id = ?, base_hash = ? WHERE workspace_id = ?', [$lastArch['id'], $lastArch['row_hash'], $ws1]);
 $admin->get('/admin/audit?verify=1');
 check('Si se borran registros antiguos sin archivarlos se detecta; archivados (con el punto de partida), la cadena sigue válida', $brokenNoBase && str_contains($admin->body, 'data-audit-verify="ok"'), snippet($admin));
+
+// ================================================================ internal notification engine
+// The engine itself needs PHP-FPM and is checked for real by tests/fpm/engine.sh (Nginx + PHP-FPM,
+// no cron, nobody signed in). Here: the address is closed to strangers and does nothing on php -S.
+group('1.15 · Motor interno de avisos');
+$eng = new Client($BASE);
+$eng->request('POST', '/cron/tick', '', ['X-Borealis-Chain: 0123456789abcdef']);
+check('/cron/tick sin la clave se rechaza (403) y no dice nada de la instalación', $eng->status === 403 && !str_contains($eng->body, 'Borealis 1.'), snippet($eng));
+$eng->request('GET', '/cron/tick');
+check('/cron/tick por GET no hace nada (405)', $eng->status === 405, snippet($eng));
+$tokEng = trim((string)shell_exec(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg('require ' . var_export($root . '/app/bootstrap.php', true) . '; Borealis\Core\Config::load(); echo Borealis\Services\Scheduler::token();')));
+$eng->request('POST', '/cron/tick', '', ['X-Borealis-Token: ' . $tokEng, 'X-Borealis-Chain: no-es-valida']);
+check('Con la clave pero sin una cadena válida no hace nada (409)', $eng->status === 409, snippet($eng));
+$eng->request('POST', '/cron/tick', '', ['X-Borealis-Token: ' . $tokEng, 'X-Borealis-Chain: 0123456789abcdef']);
+check('Sin PHP-FPM (php -S) el motor queda apagado: la tarea programada sigue disponible', $eng->status === 409 && !is_file($root . '/storage/heartbeat.json'), snippet($eng));
+$admin->get('/admin/notifications');
+check('Administración › Notificaciones muestra el estado del motor interno (aquí: no disponible sin PHP-FPM, o en reposo porque el cron de las pruebas ya corrió)', $admin->status === 200 && str_contains($admin->body, 'Motor interno de avisos') && preg_match('/data-engine="(unavailable|cron)"/', $admin->body), snippet($admin));
+check('El motor no se activa en la página de inicio de sesión sin PHP-FPM ni deja archivos', !is_file($root . '/storage/heartbeat.json'));

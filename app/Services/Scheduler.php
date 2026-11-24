@@ -249,6 +249,16 @@ final class Scheduler
      */
     public static function maybeAfterResponse(): void
     {
+        // 1.15: keep the internal engine beating (cheap: reads one small file); it starts its chain
+        // after the answer was sent, so the page never waits for it.
+        if (Heartbeat::enabled()) {
+            $s = Heartbeat::state();
+            if (!Heartbeat::alive($s) && (int)$s['attempt'] <= time() - 60) register_shutdown_function(function () {
+                if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+                if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+                Heartbeat::ensure();
+            });
+        }
         $mode = config('cron.web_fallback', true);
         if ($mode === false || self::$hooked) return;
         if (!function_exists('fastcgi_finish_request') && $mode !== 'always') return;
