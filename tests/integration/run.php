@@ -1465,7 +1465,9 @@ $log($pabloC, $task($pA, 'Trabajo de Pablo', ['assignee_id' => $pablo, 'estimate
 $admin->api('POST', "/api/capacity-alerts/{$a['id']}/resolve", ['action' => 'reassign', 'task_id' => $tInforme, 'user_id' => $pablo]);
 check('Reasignar a alguien sin horas disponibles se rechaza', $admin->status === 422 && (int)$q('SELECT assignee_id FROM tasks WHERE id = ?', [$tInforme])->fetchColumn() === $juan, snippet($admin));
 $admin->get('/capacity');
-check('El formulario de reasignar ofrece solo personas con horas disponibles', preg_match('/<option value="' . $lucia . '">Lucía Libre — [^<]*libres/', $admin->body) === 1 && preg_match('/<option value="' . $pablo . '">/', $admin->body) === 0, 'opciones no esperadas');
+// 1.14: only the reassign selects (the «Nuevo proyecto» dialog on every page also lists people)
+$reassign = preg_match_all('~<select class="input" name="user_id" required aria-label="Persona">(.*?)</select>~s', $admin->body, $rm) ? implode('', $rm[1]) : '';
+check('El formulario de reasignar ofrece solo personas con horas disponibles', preg_match('/<option value="' . $lucia . '">Lucía Libre — [^<]*libres/', $reassign) === 1 && preg_match('/<option value="' . $pablo . '">/', $reassign) === 0, 'opciones no esperadas');
 $admin->api('POST', "/api/capacity-alerts/{$a['id']}/resolve", ['action' => 'reassign', 'task_id' => $tInforme, 'user_id' => $lucia]);
 check('Reasignar a una persona con horas libres', $admin->status === 200 && (int)$q('SELECT assignee_id FROM tasks WHERE id = ?', [$tInforme])->fetchColumn() === $lucia, snippet($admin));
 $admin->api('POST', "/api/capacity-alerts/{$a['id']}/resolve", ['action' => 'reassign', 'task_id' => $tCompartida, 'user_id' => $sin]);
@@ -2113,6 +2115,7 @@ require __DIR__ . '/v110.php';
 require __DIR__ . '/v111.php';
 require __DIR__ . '/v112.php';
 require __DIR__ . '/v113.php';
+require __DIR__ . '/v114.php';
 
 // ---------------------------------------------------------------- summary
 $pass = count(array_filter($results, fn($r) => $r['ok']));

@@ -952,7 +952,9 @@ await attempt('Reunión semanal con participantes y enlace', async () => {
   await page.locator('#dlg-event .cal-people input[type=checkbox]').nth(1).check();
   await page.click('#dlg-event [data-event-save]');
   await waitToast(/Reunión creada/);
-  await page.goto(BASE + `/calendar?view=month&date=${monday}`);
+  // the month of the Monday after: its grid (weeks start on Monday) always holds both Mondays, even at the end of a month
+  const mondayAfter = (() => { const d = new Date(monday + 'T12:00:00'); d.setDate(d.getDate() + 7); return ymd(d); })();
+  await page.goto(BASE + `/calendar?view=month&date=${mondayAfter}`);
   const n = await page.locator('.cal-item--meeting', { hasText: 'Planificación semanal' }).count();
   check('Se repite cada lunes (y se distingue como reunión)', n >= 2, String(n));
   await page.locator('.cal-item--meeting', { hasText: 'Planificación semanal' }).first().click();
@@ -1643,7 +1645,7 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   await page.screenshot({ path: `${SHOTS}/40-monitoreo-informe.png`, fullPage: true });
   await page.goto(BASE + '/t/' + dev.key);
   check('La ficha de la tarea tiene «Seguimiento» con la desviación de horas', await page.locator('[data-deviation] .dev-over').isVisible());
-  const why = page.locator('#td-tracking details', { has: page.locator('form') });
+  const why = page.locator('#td-tracking details', { has: page.locator('select[name=reason]') }); // 1.14: the estimates box has its own form
   check('Con una desviación importante el formulario del motivo aparece abierto (opcional)', await why.evaluate((d) => d.open));
   await page.locator('#td-tracking select[name=reason]').selectOption('estimate');
   await page.locator('#td-tracking textarea[name=comment]').fill('El formulario necesitaba validaciones nuevas');
@@ -1781,6 +1783,132 @@ await attempt('Análisis: resumen, tendencias, estimaciones, planificación, esc
 });
 
 section('Diseño adaptable');
+// ------------------------------------------------------------------ 1.14
+section('Novedades 1.14');
+await attempt('1.14 · «Crear y añadir otra», trabajos rápidos y carga al asignar', async () => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(BASE + '/');
+  await page.click('[data-tour="new-task"]');
+  await page.selectOption('#nt-project', 'quick');
+  await page.fill('#nt-title', 'Primera de varias');
+  const me = await page.$$eval('#nt-assignee option:not([hidden])', (os) => os.find((o) => /\(yo\)/.test(o.textContent))?.value || '');
+  if (me) await page.selectOption('#nt-assignee', me);
+  await page.waitForTimeout(600);
+  const hint = ((await page.locator('#dlg-new-task [data-workload-hint]').textContent()) || '').trim();
+  check('Al elegir responsable se ve su carga de la semana', /esta semana/.test(hint), hint);
+  const r1 = page.waitForResponse((r) => /\/api\/projects\/quick\/tasks$/.test(r.url()) && r.request().method() === 'POST');
+  await page.click('#dlg-new-task [data-stay]');
+  const d1 = await (await r1).json();
+  await page.waitForTimeout(400);
+  check('«Crear y añadir otra» guarda y deja el diálogo abierto, vacío y con el mismo proyecto y responsable', d1.ok !== false && await page.locator('#dlg-new-task[open]').count() === 1
+    && (await page.inputValue('#nt-title')) === '' && (await page.inputValue('#nt-project')) === 'quick' && (!me || (await page.inputValue('#nt-assignee')) === me), JSON.stringify(d1).slice(0, 200));
+  await page.fill('#nt-title', 'Segunda de varias');
+  const r2 = page.waitForResponse((r) => /\/api\/projects\/quick\/tasks$/.test(r.url()) && r.request().method() === 'POST');
+  await page.click('#dlg-new-task button[type=submit].btn--primary');
+  await r2;
+  await page.waitForTimeout(500);
+  check('«Crear tarea» guarda y cierra', await page.locator('#dlg-new-task[open]').count() === 0);
+  await page.goto(BASE + '/quick');
+  check('Las dos aparecen en «Trabajos rápidos»', await page.locator('[data-quick-row]', { hasText: 'Primera de varias' }).count() === 1 && await page.locator('[data-quick-row]', { hasText: 'Segunda de varias' }).count() === 1);
+  await page.fill('#qw-title', 'Llamar al proveedor de papel');
+  await page.fill('#qw-h', '1');
+  await page.selectOption('#qw-type', 'urgent');
+  const r3 = page.waitForResponse((r) => /\/api\/quick$/.test(r.url()) && r.request().method() === 'POST');
+  await page.click('[data-quick-form] button[type=submit]');
+  await r3;
+  await page.waitForTimeout(700);
+  check('El formulario de trabajos rápidos queda listo para el siguiente (título vacío, tipo conservado)', (await page.inputValue('#qw-title')) === '' && (await page.inputValue('#qw-type')) === 'urgent');
+  await page.reload();
+  check('…y el trabajo urgente aparece marcado como imprevisto', await page.locator('[data-quick-row]', { hasText: 'Llamar al proveedor de papel' }).locator('.badge.warn').count() === 1);
+  await page.screenshot({ path: `${SHOTS}/50-trabajos-rapidos.png`, fullPage: true });
+  await page.goto(BASE + '/projects');
+  check('El espacio de trabajos rápidos no aparece entre los proyectos', await page.locator('main', { hasText: 'Trabajos rápidos' }).locator('a[href*="/projects/"]', { hasText: /^Trabajos rápidos$/ }).count() === 0);
+});
+
+await attempt('1.14 · Nuevo proyecto con responsable, fechas e integrantes', async () => {
+  await page.goto(BASE + '/projects');
+  await page.locator('main [data-dialog="dlg-new-project"]').first().click();
+  await page.fill('#np-name', 'Campaña de invierno');
+  await page.locator('#dlg-new-project [data-fill-dates]', { hasText: 'Esta semana' }).click();
+  const due = await page.inputValue('#np-due');
+  check('«Esta semana» rellena la entrega', /^\d{4}-\d{2}-\d{2}$/.test(due) || /^\d{2}\/\d{2}\/\d{4}$/.test(due), due);
+  const chips = page.locator('#dlg-new-project input[name="member_ids[]"]');
+  const nChips = await chips.count();
+  if (nChips) await chips.first().check();
+  await page.screenshot({ path: `${SHOTS}/51-nuevo-proyecto.png` });
+  const r = page.waitForResponse((x) => /\/api\/projects$/.test(x.url()) && x.request().method() === 'POST');
+  await page.click('#dlg-new-project button[type=submit]');
+  const d = await (await r).json();
+  check('El proyecto se crea en un paso, con integrantes', d.ok !== false && !!d.id && nChips > 0, JSON.stringify(d).slice(0, 200));
+});
+
+await attempt('1.14 · Estimación del trabajador en la ficha', async () => {
+  if (!estKey) { check('Hay una tarea con estimación para probar', false); return; }
+  await page.goto(BASE + '/t/' + estKey);
+  const box = page.locator('[data-estimates]');
+  check('La ficha muestra administración, trabajador, acordado y real', await box.isVisible() && await box.locator('[data-est-agreed]').isVisible() && await box.locator('[data-est-real]').isVisible());
+  const form = box.locator('[data-estimate-form]');
+  if (!(await form.isVisible())) await box.locator('details summary').first().click();
+  await form.locator('input[name=hours]').fill('9');
+  await form.locator('button[type=submit]').click();
+  await page.waitForTimeout(700);
+  check('Cambiar lo acordado sin motivo se explica en el campo', ((await form.locator('[data-error-for="reason"]').textContent()) || '').trim().length > 0);
+  await form.locator('input[name=hours]').fill('9');
+  await form.locator('input[name=reason]').fill('Hay que adaptar también la versión móvil');
+  const r = page.waitForResponse((x) => /\/estimate$/.test(x.url()) && x.request().method() === 'POST');
+  await form.locator('button[type=submit]').click();
+  await r;
+  await page.waitForTimeout(800);
+  await page.goto(BASE + '/t/' + estKey);
+  check('Con un motivo queda «por revisar»', (await page.locator('[data-estimates]').getAttribute('data-estimates')) === 'pending');
+  const agree = page.locator('[data-estimate-agree]');
+  check('Quien gestiona ve «Acordar» con la propuesta', await agree.isVisible() && (await agree.locator('input[name=hours]').inputValue()).startsWith('9'));
+  await page.screenshot({ path: `${SHOTS}/52-estimaciones.png` });
+  const r2 = page.waitForResponse((x) => /\/estimate\/agree$/.test(x.url()));
+  await agree.locator('button[type=submit]').click();
+  await r2;
+  await page.waitForTimeout(800);
+  await page.goto(BASE + '/t/' + estKey);
+  check('Al acordar se cierra la revisión y el acordado pasa a 9 h', (await page.locator('[data-estimates]').getAttribute('data-estimates')) === 'agreed' && /9/.test(await page.locator('[data-est-agreed]').textContent()));
+});
+
+await attempt('1.14 · Carta Gantt', async () => {
+  const pidG = (projectUrl.match(/\/projects\/(\d+)/) || [])[1];
+  await page.goto(BASE + projectUrl);
+  if (pidG) await apiCall(`/api/projects/${pidG}/tasks`, 'POST', { title: 'Hito de lanzamiento', due_date: plusDays(9), is_milestone: 1 });
+  if (pidG) await apiCall(`/api/projects/${pidG}/tasks`, 'POST', { title: 'Preparar contenidos', start_date: plusDays(1), due_date: plusDays(6) });
+  await page.goto(BASE + projectUrl + '/timeline');
+  check('La carta Gantt se muestra en el proyecto', await page.locator('[data-gantt]').isVisible(), page.url());
+  const bars = await page.locator('[data-gantt-bar]').count();
+  check('…con barras para las tareas con fechas y el hito', bars > 0 && await page.locator('.gantt-milestone').count() >= 1, String(bars));
+  await page.locator('[data-gantt-scale="month"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  check('Cambia a escala de meses', /scale=month/.test(page.url()) && await page.locator('[data-gantt-scale="month"][aria-current="page"]').count() === 1);
+  await page.locator('[data-gantt-scale="week"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  await page.screenshot({ path: `${SHOTS}/53-gantt.png`, fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  check('En el móvil la carta se desplaza dentro de su marco, sin desbordar la página', (await noOverflow()) <= 1, String(await noOverflow()));
+  await page.screenshot({ path: `${SHOTS}/53-gantt-movil.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
+});
+
+await attempt('1.14 · Auditoría, notificaciones y análisis por período', async () => {
+  await page.goto(BASE + '/admin/audit');
+  check('El registro de actividad lista los cambios', await page.locator('[data-audit-row]').count() > 0);
+  await page.getByRole('link', { name: /Comprobar integridad/ }).click();
+  await page.waitForLoadState('domcontentloaded');
+  check('«Comprobar integridad» confirma la cadena', await page.locator('[data-audit-verify="ok"]').isVisible());
+  await page.screenshot({ path: `${SHOTS}/54-auditoria.png`, fullPage: true });
+  await page.goto(BASE + '/admin/notifications');
+  check('Administración › Notificaciones dice el estado de la tarea programada', await page.locator('[data-job-state]').isVisible());
+  await page.screenshot({ path: `${SHOTS}/55-admin-notificaciones.png`, fullPage: true });
+  await page.goto(BASE + '/analysis?period=quarter');
+  check('Análisis por trimestre con «¿Qué ocurrió en el período?»', await page.locator('[data-movement]').isVisible());
+  await page.screenshot({ path: `${SHOTS}/56-analisis-periodo.png`, fullPage: true });
+});
+
 const viewports = { escritorio: [1440, 900], portatil: [1280, 800], tableta: [820, 1180], movil: [390, 844] };
 const pagesToShoot = { inicio: '/', proyectos: '/projects', tablero: projectUrl + '/board', lista: projectUrl + '/list', resumen: projectUrl, 'mi-trabajo': '/my-work', calendario: '/calendar', monitoreo: '/monitoring', analisis: '/analysis', equipos: '/teams', sprints: '/sprints', 'todo-a-mano': '/integrations', notificaciones: '/notifications' };
 for (const [vname, [w, h]] of Object.entries(viewports)) {

@@ -4,7 +4,8 @@ declare(strict_types=1);
 /*
  * Local stand-ins, ONLY for the test-suite, of three outside services Borealis 1.8 talks to:
  *   /push/{name}                 a browser push service (FCM, Mozilla, Apple). Stores what it gets;
- *                                /push/gone answers 410 (the device unsubscribed).
+ *                                /push/gone answers 410 (the device unsubscribed); /push/flaky answers
+ *                                503 after POST /_down (until POST /_up); /push/badauth answers 403.
  *   /discord/api/webhooks/{id}/{token}  a Discord channel webhook; …/broken answers 404.
  *   /gh/repos/{owner}/{name}[/issues|/pulls|/commits]  the GitHub REST API (acme/web is public,
  *                                acme/secret needs «Authorization: Bearer good-token»).
@@ -33,11 +34,16 @@ if ($path === '/_log') {
     out(200, $rows);
 }
 if ($path === '/_reset') { @unlink($log); out(204); }
+// 1.14: /push/flaky answers 503 (temporary failure) while «down» is on, so retries can be tested.
+if ($path === '/_down') { touch($log . '.down'); out(204); }
+if ($path === '/_up') { @unlink($log . '.down'); out(204); }
 
 file_put_contents($log, json_encode(['method' => $method, 'path' => $path, 'query' => $_SERVER['QUERY_STRING'] ?? '', 'headers' => $headers, 'body' => base64_encode($body)]) . "\n", FILE_APPEND | LOCK_EX);
 
 if (str_starts_with($path, '/push/')) {
     if ($path === '/push/gone') out(410, ['error' => 'gone']);
+    if ($path === '/push/flaky' && is_file($log . '.down')) out(503, ['error' => 'try later']);
+    if ($path === '/push/badauth') out(403, ['error' => 'invalid VAPID']);
     out(201);
 }
 if (preg_match('~^/discord/api/webhooks/(\d+)/([\w-]+)$~', $path, $m)) {
