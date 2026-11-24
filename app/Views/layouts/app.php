@@ -44,6 +44,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
       <a class="nav-item" href="<?= e(url('/teams')) ?>"<?= $nav === 'teams' ? ' aria-current="page"' : '' ?>><?= icon('users') ?> Equipos</a>
       <a class="nav-item" data-tour="projects" href="<?= e(url('/projects')) ?>"<?= $nav === 'projects' && !$currentProjectId ? ' aria-current="page"' : '' ?>><?= icon('folder') ?> Proyectos</a>
       <a class="nav-item" data-tour="nav-tasks" href="<?= e(url('/tasks')) ?>"<?= $nav === 'tasks' ? ' aria-current="page"' : '' ?>><?= icon('list') ?> Tareas</a>
+      <a class="nav-item" href="<?= e(url('/quick')) ?>"<?= $nav === 'quick' ? ' aria-current="page"' : '' ?>><?= icon('pin') ?> Trabajos rápidos</a>
       <?php if ($s['show_sprints']): ?><a class="nav-item" data-tour="nav-sprints" href="<?= e(url('/sprints')) ?>"<?= $nav === 'sprints' ? ' aria-current="page"' : '' ?>><?= icon('zap') ?> Sprints</a><?php endif; ?>
       <a class="nav-item" data-tour="nav-calendar" href="<?= e(url('/calendar')) ?>"<?= $nav === 'calendar' ? ' aria-current="page"' : '' ?>><?= icon('calendar') ?> Calendario</a>
       <a class="nav-item" data-tour="nav-tools" href="<?= e(url('/integrations')) ?>"<?= $nav === 'integrations' ? ' aria-current="page"' : '' ?>><?= icon('link') ?> Todo a mano</a>

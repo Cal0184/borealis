@@ -1,7 +1,7 @@
 // Declarative behaviours: data-api forms, data-call buttons, data-patch inline edits,
 // menus, dialogs, toggles, selection and bulk actions.
-import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.13.0';
-import { openTask, closeDrawer } from './drawer.js?v=1.13.0';
+import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.14.0';
+import { openTask, closeDrawer } from './drawer.js?v=1.14.0';
 
 // ---------- Form serialisation ----------
 function serialize(form) {
@@ -78,14 +78,21 @@ async function submitApiForm(form, submitter) {
     }
     clearDirty(form);
     const dlg = form.closest('dialog');
-    if (form.hasAttribute('data-close') && dlg) closeDialog(dlg, true);
+    // 1.14: «Crear y añadir otra» (a submit button with data-stay) keeps the dialog open
+    const stay = !!submitter?.hasAttribute('data-stay');
+    if (form.hasAttribute('data-close') && dlg && !stay) closeDialog(dlg, true);
     if (form.hasAttribute('data-show-link') && (data.share_text || data.link)) {
       const slot = form.querySelector('[data-invite-link]');
       // fillShare sets defaultValue as well: the form is reset right after, and a reset used to
       // empty the box (that was why «Invitar por enlace» seemed to generate nothing).
       if (slot) fillShare(slot, data.share_text || data.link, data.share_title);
     }
-    if (form.hasAttribute('data-reset')) form.reset();
+    if (form.hasAttribute('data-reset')) {
+      // 1.14: fields marked data-keep-value (project, person, date…) survive the reset
+      const kept = [...form.querySelectorAll('[data-keep-value]')].map((el) => [el, el.value]);
+      form.reset();
+      kept.forEach(([el, v]) => { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); });
+    }
     const link = form.dataset.toastLink === 'task' && data.task ? { href: data.task.url, label: 'Abrir', task: data.task.key }
       : form.dataset.toastLink === 'project' && data.url ? { href: data.url, label: 'Abrir proyecto' }
       : form.dataset.toastLink === 'url' && data.url ? { href: data.url, label: form.dataset.toastLabel || 'Abrir' } : null;
@@ -95,7 +102,7 @@ async function submitApiForm(form, submitter) {
     if (data.redirect) { location.href = data.redirect; return; }
     if (form.dataset.redirect) { location.href = form.dataset.redirect; return; }
     if (form.dataset.onSuccess === 'reload') { location.reload(); return; }
-    const keepFocus = form.hasAttribute('data-keep-open') ? form.querySelector('[name=title]')?.id : null;
+    const keepFocus = form.hasAttribute('data-keep-open') || stay ? form.querySelector('[name=title]')?.id : null;
     await refresh();
     if (keepFocus) {
       const el = document.getElementById(keepFocus);
@@ -390,6 +397,20 @@ document.addEventListener('click', (e) => {
     const el = document.querySelector(classToggler.dataset.toggleClass);
     el?.classList.toggle(classToggler.dataset.class || 'open');
     if (classToggler.dataset.focus && el?.classList.contains(classToggler.dataset.class || 'open')) document.querySelector(classToggler.dataset.focus)?.focus();
+    return;
+  }
+
+  // 1.14: «Esta semana» / «Este mes» fill a pair of date fields
+  const fill = t.closest('[data-fill-dates]');
+  if (fill) {
+    e.preventDefault();
+    try {
+      for (const [sel, v] of Object.entries(JSON.parse(fill.dataset.fillDates))) {
+        const el = document.querySelector(sel);
+        if (el) { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+      fill.closest('form')?.querySelector('details.more-options')?.setAttribute('open', '');
+    } catch { /* malformed */ }
     return;
   }
 

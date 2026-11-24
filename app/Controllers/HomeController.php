@@ -23,7 +23,7 @@ final class HomeController
     public function home(Request $r): Response
     {
         Notifications::generateDueReminders();
-        $projects = Projects::list(['sort' => 'recent']);
+        $projects = Projects::list(['sort' => 'recent', 'standard' => 1]);
         $active = array_values(array_filter($projects, fn($p) => $p['state'] !== 'completed'));
         $mine = Tasks::query(['assignee' => 'me', 'category' => ['todo', 'in_progress'], 'sort' => 'due', 'with_subtasks' => 1, 'limit' => 200]);
         $soon = array_values(array_filter($mine, fn($t) => $t['due_date'] && $t['due_date'] <= date('Y-m-d', strtotime(today() . ' +14 days'))));

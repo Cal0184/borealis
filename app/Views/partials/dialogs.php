@@ -3,7 +3,10 @@ use Borealis\Security\Policy;
 use Borealis\Services\Projects;
 use Borealis\Services\Teams;
 use Borealis\Services\Workspaces;
-$creatable = array_values(array_filter(Projects::list(), fn($p) => Policy::canProject($p, 'task.create')));
+$creatable = array_values(array_filter(Projects::list(), fn($p) => Policy::canProject($p, 'task.create') && ($p['kind'] ?? 'standard') === 'standard'));
+// 1.14: «Trabajos rápidos» is always offered (no project to configure); whoever can assign others sees everybody there
+$quick = ['id' => 'quick'];
+$quickPeople = \Borealis\Services\QuickWork::people();
 // 1.7.1: sprints that can still receive tasks, for «Nueva tarea» (filtered by the chosen project).
 $openSprints = $creatable ? \Borealis\Core\Database::get()->all("SELECT id, project_id, name, state, start_date, end_date FROM sprints WHERE state <> 'completed' AND project_id IN (" . \Borealis\Core\Database::in(array_column($creatable, 'id')) . ") ORDER BY state = 'active' DESC, start_date IS NULL, start_date, id", array_map('intval', array_column($creatable, 'id'))) : [];
 ?>
@@ -12,24 +15,24 @@ $openSprints = $creatable ? \Borealis\Core\Database::get()->all("SELECT id, proj
     <div class="modal-head"><h2 id="dlg-new-task-title">Nueva tarea</h2><button type="button" class="btn btn--ghost btn--icon" data-close-dialog aria-label="Cerrar"><?= icon('x') ?></button></div>
     <div class="modal-body">
       <div class="form-error" data-form-error></div>
-      <?php if (!$creatable): ?>
-        <div class="empty"><?= icon('folder') ?><h3>Primero necesitas un proyecto</h3><p>Las tareas viven dentro de un proyecto donde puedas colaborar.</p></div>
-      <?php else: ?>
         <div class="field"><label for="nt-title">Título</label><input class="input" id="nt-title" name="title" required maxlength="255" autocomplete="off" placeholder="¿Qué hay que hacer?"><span class="error" data-error-for="title"></span></div>
         <div class="field"><label for="nt-project">Proyecto</label>
-          <select class="select" id="nt-project" name="project_id" required>
+          <select class="select" id="nt-project" name="project_id" required data-keep-value>
             <?php foreach ($creatable as $p): ?><option value="<?= (int)$p['id'] ?>"<?= selected($p['id'], $currentProjectId) ?>><?= e($p['name']) ?> (<?= e($p['project_key']) ?>)</option><?php endforeach; ?>
+            <option value="quick"<?= ($currentProjectKind ?? '') === 'quick' ? ' selected' : '' ?>><?= e(\Borealis\Services\QuickWork::NAME) ?> (sin proyecto)</option>
           </select>
         </div>
         <?php $byUser = [];
           foreach ($creatable as $p) foreach (Projects::assignableUsers($p) as $m) { $byUser[(int)$m['id']]['name'] = $m['name']; $byUser[(int)$m['id']]['p'][] = (int)$p['id']; }
+          foreach ($quickPeople as $m) if ($m) { $byUser[(int)$m['id']]['name'] = $m['name']; $byUser[(int)$m['id']]['p'][] = 'quick'; }
           uasort($byUser, fn($a, $b) => strcasecmp($a['name'], $b['name'])); ?>
         <div class="form-row">
           <div class="field"><label for="nt-assignee">Responsable</label>
-            <select class="select" id="nt-assignee" name="assignee_id" data-filter-by="#nt-project">
+            <select class="select" id="nt-assignee" name="assignee_id" data-filter-by="#nt-project" data-workload-select data-keep-value>
               <option value="">Sin asignar</option>
               <?php foreach ($byUser as $uid => $u): ?><option value="<?= $uid ?>" data-projects="<?= e(implode(',', $u['p'])) ?>"><?= e($u['name']) ?><?= $uid === (int)$s['user']['id'] ? ' (yo)' : '' ?></option><?php endforeach; ?>
             </select>
+            <span class="hint" data-workload-hint></span>
             <span class="error" data-error-for="assignee_id"></span>
           </div>
           <div class="field"><label for="nt-sprint">Sprint</label>
@@ -51,17 +54,21 @@ $openSprints = $creatable ? \Borealis\Core\Database::get()->all("SELECT id, proj
         </div>
         <details class="more-options"><summary><?= icon('plus', 'sm') ?> Más opciones</summary>
           <div class="form-row">
+            <div class="field"><label for="nt-start">Inicio</label><input class="input" type="date" id="nt-start" name="start_date"><span class="error" data-error-for="start_date"></span></div>
             <div class="field"><label for="nt-due">Vencimiento</label><input class="input" type="date" id="nt-due" name="due_date"><span class="error" data-error-for="due_date"></span></div>
             <div class="field"><label for="nt-dt">Hora de entrega <span class="muted small">(opcional)</span></label><input class="input" type="time" id="nt-dt" name="due_time"><span class="error" data-error-for="due_time"></span></div>
           </div>
           <div class="field"><label for="nt-desc">Descripción</label><textarea class="textarea" id="nt-desc" name="description" rows="3"></textarea></div>
+          <div class="row wrap">
+            <label class="check"><input type="checkbox" name="unplanned" value="1"> Imprevista (no estaba en la planificación)</label>
+            <label class="check"><input type="checkbox" name="is_milestone" value="1"> Es un hito</label>
+          </div>
           <p class="hint">Solo aparecen como responsables quienes pueden trabajar en el proyecto elegido.</p>
         </details>
-      <?php endif; ?>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" data-close-dialog>Cancelar</button>
-      <?php if ($creatable): ?><button type="submit" class="btn btn--primary">Crear tarea</button><?php endif; ?>
+      <button type="submit" class="btn btn--primary">Crear tarea</button><button type="submit" class="btn" data-stay title="Guarda y deja el formulario listo para la siguiente">Crear y añadir otra</button>
     </div>
   </form>
 </dialog>
@@ -77,17 +84,26 @@ $openSprints = $creatable ? \Borealis\Core\Database::get()->all("SELECT id, proj
         <div class="field key-field"><label for="np-key">Siglas</label><input class="input key-input" id="np-key" name="project_key" maxlength="6" placeholder="WEB" autocomplete="off" pattern="[A-Za-z][A-Za-z0-9]{1,5}" title="De 2 a 6 letras o números, empezando por letra"><span class="error" data-error-for="project_key"></span></div>
       </div>
       <p class="hint" style="margin-top:-6px">Las siglas encabezan las tareas: <strong data-key-preview>WEB</strong>-1, <span data-key-preview-2>WEB</span>-2… Se proponen solas a partir del nombre y puedes cambiarlas.</p>
+      <?php $npPeople = $quickPeople; $npMe = (int)$s['user']['id']; $mon = date('Y-m-d', strtotime('monday this week', strtotime(today()))); ?>
+      <div class="form-row">
+        <div class="field"><label for="np-lead">Responsable</label><select class="select" id="np-lead" name="lead_user_id"><?php foreach ($npPeople as $m): ?><option value="<?= (int)$m['id'] ?>"<?= selected($m['id'], $npMe) ?>><?= e($m['name']) ?><?= (int)$m['id'] === $npMe ? ' (yo)' : '' ?></option><?php endforeach; ?></select></div>
+        <div class="field"><label for="np-due">Entrega <span class="muted small">(opcional)</span></label><input class="input" type="date" id="np-due" name="due_date"><span class="error" data-error-for="due_date"></span>
+          <span class="hint"><button class="link-btn" type="button" data-fill-dates='{"#np-start":"<?= e($mon) ?>","#np-due":"<?= e(date('Y-m-d', strtotime($mon . ' +4 days'))) ?>"}'>Esta semana</button> · <button class="link-btn" type="button" data-fill-dates='{"#np-start":"<?= e(today()) ?>","#np-due":"<?= e(date('Y-m-t')) ?>"}'>Este mes</button></span></div>
+      </div>
+      <?php if (count($npPeople) > 1): ?>
+      <div class="field"><span class="label">Integrantes <span class="muted small">(opcional, puedes añadir más después)</span></span>
+        <div class="people-pick" data-people-pick>
+          <?php foreach ($npPeople as $m): if ((int)$m['id'] === $npMe) continue; ?><label class="chip-check"><input type="checkbox" name="member_ids[]" value="<?= (int)$m['id'] ?>"> <?= e($m['name']) ?></label><?php endforeach; ?>
+        </div></div>
+      <?php endif; ?>
       <details class="more-options"><summary><?= icon('plus', 'sm') ?> Más opciones</summary>
-        <div class="field"><label for="np-desc">Descripción</label><textarea class="textarea" id="np-desc" name="description" rows="3"></textarea></div>
+        <div class="field"><label for="np-desc">Objetivo o descripción</label><textarea class="textarea" id="np-desc" name="description" rows="3" placeholder="¿Qué se quiere lograr?"></textarea></div>
         <div class="form-row">
           <div class="field"><label for="np-team">Equipo</label><select class="select" id="np-team" name="team_id"><option value="">Sin equipo</option><?php foreach (Teams::list() as $t): ?><option value="<?= (int)$t['id'] ?>"><?= e($t['name']) ?></option><?php endforeach; ?></select></div>
-        </div>
-        <p class="hint mb-sm"><?= icon('lock', 'sm') ?> Lo ven solo sus integrantes, los equipos que participan y la administración del espacio.</p>
-        <div class="form-row">
           <div class="field"><label for="np-start">Inicio</label><input class="input" type="date" id="np-start" name="start_date"></div>
-          <div class="field"><label for="np-due">Entrega</label><input class="input" type="date" id="np-due" name="due_date"><span class="error" data-error-for="due_date"></span></div>
           <div class="field"><label for="np-state">Estado</label><select class="select" id="np-state" name="state"><option value="active">Activo</option><option value="planned">Planificado (aún no empieza)</option></select></div>
         </div>
+        <p class="hint mb-sm"><?= icon('lock', 'sm') ?> Lo ven solo sus integrantes, los equipos que participan y la administración del espacio.</p>
       </details>
     </div>
     <div class="modal-foot">

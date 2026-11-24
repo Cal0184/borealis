@@ -42,7 +42,7 @@ final class Shell
             'user' => Auth::user(),
             'workspace' => $ws,
             'workspaces' => Workspaces::forUser(),
-            'projects' => array_slice(Projects::list(['sort' => 'recent']), 0, 6),
+            'projects' => array_slice(Projects::list(['sort' => 'recent', 'standard' => 1]), 0, 6),
             'unread' => Notifications::unreadCount(),
             'show_calendar' => $modProjects('calendar'),
             'show_sprints' => $modProjects('sprints') || Policy::can('projects.create'),

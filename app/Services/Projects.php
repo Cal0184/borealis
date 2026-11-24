@@ -49,6 +49,8 @@ final class Projects
         if (!empty($f['q'])) { $where[] = '(p.name LIKE ? OR p.project_key LIKE ?)'; $params[] = '%' . $f['q'] . '%'; $params[] = '%' . $f['q'] . '%'; }
         if (!empty($f['state']) && isset(self::STATES[$f['state']])) { $where[] = 'p.state = ?'; $params[] = $f['state']; }
         if (!empty($f['team_id'])) { $where[] = 'p.team_id = ?'; $params[] = (int)$f['team_id']; }
+        // 1.14: the «Trabajos rápidos» project is not a project people manage: out of the project lists
+        if (!empty($f['standard'])) $where[] = "p.kind = 'standard'";
         $order = match ($f['sort'] ?? '') { 'due' => 'p.due_date IS NULL, p.due_date', 'recent' => 'p.updated_at DESC', default => 'p.name' };
         $rows = Database::get()->all('SELECT p.*, t.name AS team_name, u.name AS lead_name, u.avatar_color AS lead_color FROM projects p
             LEFT JOIN teams t ON t.id = p.team_id LEFT JOIN users u ON u.id = p.lead_user_id WHERE ' . implode(' AND ', $where) . " ORDER BY $order", $params);
@@ -115,8 +117,10 @@ final class Projects
         if (!empty($v['team_id'])) Teams::find((int)$v['team_id']);
         if (!empty($v['lead_user_id']) && !Workspaces::isActiveMember((int)$v['lead_user_id'])) throw HttpException::invalid(['lead_user_id' => 'Responsable no válido.']);
         self::assertDates($v['start_date'] ?? null, $v['due_date'] ?? null);
+        $members = array_values(array_unique(array_filter(array_map('intval', is_array($input['member_ids'] ?? null) ? $input['member_ids'] : []))));
+        foreach ($members as $uid) if (!Workspaces::isActiveMember($uid)) throw HttpException::invalid(['member_ids' => 'Una de las personas no pertenece al espacio.']);
 
-        return $db->transaction(function () use ($db, $v, $key) {
+        $pid = $db->transaction(function () use ($db, $v, $key, $members) {
             $id = $db->insert('projects', [
                 'workspace_id' => Policy::wsId(), 'team_id' => $v['team_id'] ?: null, 'project_key' => $key, 'name' => $v['name'],
                 'description' => $v['description'], 'color' => $v['color'] ?? '#10B981', 'visibility' => 'private', // 1.7: access only through membership
@@ -127,9 +131,18 @@ final class Projects
                 $db->insert('statuses', ['project_id' => $id, 'name' => $n, 'category' => $cat, 'color' => $color, 'position' => $i]);
             }
             $db->insert('project_members', ['project_id' => $id, 'user_id' => Auth::id(), 'role_id' => Policy::projectRoleId('manager'), 'added_at' => now()]);
-            Activity::log('created', 'project', $id, "Creó el proyecto «{$v['name']}»", $id);
+            // 1.14: the lead (if it is someone else) manages it too, and the people chosen in the dialog join as contributors
+            $lead = (int)($v['lead_user_id'] ?: Auth::id());
+            if ($lead !== (int)Auth::id()) $db->run('INSERT IGNORE INTO project_members (project_id, user_id, role_id, added_at) VALUES (?,?,?,?)', [$id, $lead, Policy::projectRoleId('manager'), now()]);
+            foreach ($members as $uid) if ($uid !== (int)Auth::id() && $uid !== $lead) $db->run('INSERT IGNORE INTO project_members (project_id, user_id, role_id, added_at) VALUES (?,?,?,?)', [$id, $uid, Policy::projectRoleId('contributor'), now()]);
+            Activity::log('created', 'project', $id, "Creó el proyecto «{$v['name']}»", $id, null, [], null,
+                ['after' => ['nombre' => $v['name'], 'siglas' => $key, 'inicio' => $v['start_date'], 'entrega' => $v['due_date'], 'estado' => ($v['state'] ?? null) ?: 'active', 'integrantes' => count($members) + 1]]);
             return $id;
         });
+        foreach (array_unique(array_merge($members, [(int)($v['lead_user_id'] ?: 0)])) as $uid) {
+            if ($uid > 0 && $uid !== (int)Auth::id()) Notifications::send($uid, 'project', "Te añadieron al proyecto {$v['name']}", url('/projects/' . $pid), $pid);
+        }
+        return $pid;
     }
 
     private static function assertDates(?string $start, ?string $due): void
@@ -185,7 +198,10 @@ final class Projects
         if ($oldKey) $changes[] = "cambió las siglas de {$oldKey} a {$v['project_key']}";
         if (isset($v['name']) && $v['name'] !== $p['name']) $changes[] = "renombró «{$p['name']}» a «{$v['name']}»";
         if (isset($v['state']) && $v['state'] !== $p['state']) $changes[] = 'cambió el estado a ' . self::STATES[$v['state']];
-        Activity::log('updated', 'project', $id, $changes ? ucfirst(implode(', ', $changes)) : 'Actualizó el proyecto «' . ($v['name'] ?? $p['name']) . '»', $id, null, ['fields' => array_keys($v)]);
+        $chg = array_keys(array_filter($v, fn($val, $k) => !in_array($k, ['completed_at', 'description'], true) && (string)$val !== (string)($p[$k] ?? ''), ARRAY_FILTER_USE_BOTH));
+        $isDates = $chg && !array_diff($chg, ['start_date', 'due_date']);
+        Activity::log($isDates ? 'due_changed' : 'updated', 'project', $id, $changes ? ucfirst(implode(', ', $changes)) : ($isDates ? 'Cambió las fechas del proyecto «' . $p['name'] . '»' : 'Actualizó el proyecto «' . ($v['name'] ?? $p['name']) . '»'), $id, null, ['fields' => array_keys($v)], null,
+            ['before' => array_intersect_key($p, array_flip($chg)), 'after' => array_intersect_key($v, array_flip($chg)), 'reason' => is_string($input['change_reason'] ?? null) ? $input['change_reason'] : null, 'category' => $isDates ? 'calendar' : 'project']);
         if (($v['state'] ?? null) === 'completed' && $p['state'] !== 'completed') {
             foreach (self::memberIds($id) as $uid) Notifications::send($uid, 'project', "Proyecto completado: " . ($v['name'] ?? $p['name']), url('/projects/' . $id), $id);
         }
