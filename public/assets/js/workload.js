@@ -28,7 +28,7 @@ function hint(select, people) {
   if (!slot) return;
   const w = people[select.value];
   slot.textContent = !w ? '' : w.state === 'over' ? `Ya supera sus horas de la semana (${w.text}). Considera otra persona u otra fecha.`
-    : w.state === 'full' ? `Le queda poco tiempo esta semana (${w.text}).` : w.capacity == null ? `Esta semana: ${w.text} (sin horas semanales configuradas).` : `Disponible: ${String(w.free).replace('.', ',')} h esta semana.`;
+    : w.state === 'full' ? `Le queda poco tiempo esta semana (${w.text}).` : w.capacity == null ? `${w.text} (sin horas semanales configuradas).` : `Disponible: ${String(w.free).replace('.', ',')} h esta semana.`;
   slot.dataset.load = w?.state || '';
 }
 

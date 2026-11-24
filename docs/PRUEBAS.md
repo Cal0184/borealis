@@ -1,15 +1,63 @@
-# Resultados de pruebas — Borealis 1.13.0
+# Resultados de pruebas — Borealis 1.14.0
 
-Resultados **reales**, generados por las propias pruebas el 17/11/2026, instalando desde el ZIP. Nada de esta lista se marcó a mano.
+Resultados **reales**, generados por las propias pruebas el 24/11/2026, instalando desde el ZIP. Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 949 | 0 | 949 |
-| Navegador Chromium (`tests/e2e/run.mjs`) | 289 | 0 | 289 |
+| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 1048 | 0 | 1048 |
+| Navegador Chromium (`tests/e2e/run.mjs`) | 311 | 0 | 311 |
+
+**Después de esta ejecución** solo cambió un texto: la pista de carga dice «4 tareas esta semana (sin horas semanales configuradas)» en vez de repetir «esta semana». La prueba del navegador que la comprueba busca «esta semana» y sigue valiendo, pero no se volvió a ejecutar.
 
 **Entorno:** PHP 8.3.6 (servidor integrado de PHP), MariaDB 10.11, Chromium (Playwright), Linux. Cada ejecución parte de una base de datos vacía e instala Borealis desde el instalador web.
 
 **No probado todavía:** Apache con `mod_rewrite` y Nginx reales (solo el servidor integrado de PHP), MySQL 8, Safari y Firefox, lectores de pantalla, hospedaje compartido real, rendimiento con miles de tareas. **Servicios externos reales:** la entrega de avisos a un teléfono real (FCM/Mozilla/Apple), un canal de Discord real, la API real de GitHub, Google Calendar con un cliente OAuth real y un servidor de correo real. Todos se probaron contra servidores locales que imitan sus respuestas (`tests/fake-services/server.php`, `tests/fake-services/smtp.php`, `tests/fake-google/server.php`): eso prueba lo que envía Borealis (incluido el cifrado y la firma de cada aviso, que la prueba descifra y verifica), no que esos servicios lo acepten.
+
+**Novedades 1.14:** grupos «1.14 · …» en integración (`tests/integration/v114.php`, 99 comprobaciones):
+- **Migración 016:** aplicada y repetida.
+- **Tarea programada:**
+  - por consola, con su registro;
+  - por `/cron/run`: sin clave, con una clave equivocada, con la clave en la cabecera, sin sesión, sin repetir en menos de un minuto, solo la administración de la instalación cambia la clave y la anterior deja de valer;
+  - por visita;
+  - aviso cuando deja de ejecutarse;
+  - recordatorios de quien nunca abre Borealis.
+- **Envíos al dispositivo**, contra el servicio simulado: un fallo pasajero (503) que se reintenta a su hora y llega una sola vez; un aviso leído que ya no se reintenta; un error permanente (403 de VAPID) que no se reintenta y se muestra con su motivo; la renovación de la suscripción con y sin prueba de la anterior; la preferencia activada por defecto y respetada al apagarla.
+- **Auditoría:** antes, después y motivo; historial de eventos; filtros por categoría, proyecto, persona, acción y período; CSV; permisos; integridad ante modificación, eliminación y huella borrada; ningún secreto en el registro.
+- **Estimaciones:** motivo obligatorio, permisos, «por revisar», avisos, acuerdo, historial y alertas «superó el tiempo acordado» y «ampliación importante».
+- **Trabajos rápidos:** crear, asignar, horas, permisos, página semanal y carga al asignar (15 de 15 h con trabajo pendiente).
+- **Proyectos:** nuevo proyecto con responsable e integrantes.
+- **Carta Gantt:** contenido, escalas, actualización sola, línea base y permisos.
+- **Análisis por período.**
+- **Actualización 1.13 → 1.14**, con la estimación de administración, el plan original desde el historial de fechas y la reparación de la preferencia.
+
+«Novedades 1.14» en el navegador recorre:
+- «Crear y añadir otra» y la carga del responsable;
+- Trabajos rápidos;
+- nuevo proyecto con «Esta semana» e integrantes;
+- proponer y acordar una estimación;
+- la carta Gantt en escritorio y en el móvil (sin desbordar la página);
+- la auditoría con «Comprobar integridad»;
+- Administración › Notificaciones;
+- Análisis por trimestre.
+
+**No probado:**
+- un cron real de HestiaCP ni PHP-FPM real (el respaldo por visitas se probó forzándolo en el servidor integrado);
+- la entrega a teléfonos reales;
+- el evento `pushsubscriptionchange` disparado por un navegador real (se probó su API);
+- Safari y Firefox.
+
+**Fallos encontrados en 1.14 durante las pruebas (corregidos):**
+- la estimación del trabajador pedía un permiso inexistente y daba 403;
+- el espacio de trabajos rápidos no se podía usar la primera vez porque se buscaba con los permisos del proyecto;
+- quien creaba trabajos rápidos pasaba a gestionar ese espacio y veía la carga de todos;
+- los formularios para elegir personas listaban a gente con la que no se compartía proyecto;
+- la primera estimación no quedaba en el historial;
+- el filtro de período de la auditoría no aceptaba semana, mes, trimestre ni año;
+- un registro de auditoría al que se le borraba la huella pasaba por anterior a la 1.14;
+- la pista de carga quedaba vacía para quien no tiene horas semanales;
+- «Enter» en «Nueva tarea» habría pulsado «Crear y añadir otra».
+
+Otros fallos eran de las propias pruebas: selectores que encontraban dos formularios, y una reunión semanal que dependía del día del mes.
 
 **Novedades 1.13:** grupo «1.13 · Análisis y decisiones» en integración, con las pruebas A–J de la Fase C: (A) 15 a tiempo y 5 fuera de plazo → 75 % con el denominador y los excluidos; (B) sugerencia de estimación con 5 tareas comparables, sin cambiar ninguna estimación y sin mezclar categorías; (C) con 2 tareas, «No hay datos suficientes para identificar una tendencia confiable.»; (D) 40 h de capacidad y 58 h planificadas → «supera la capacidad disponible en 18 horas» con alternativas; (E) sprint con 22 h pendientes, 12 h de capacidad y una tarea bloqueada → «Riesgo elevado» explicado y sin probabilidad; (F) simular el traslado de la tarea de 12 h sin tocar la base; (G) aplicar con permisos (403), confirmación (422), datos cambiados (409), auditoría, reversión y reversión rechazada si alguien cambió algo después; (H) permisos: 404 para proyectos y sprints ajenos en página, API, CSV, imprimible y simulador; (I) el resultado guardado se recalcula al cambiar una estimación o una fecha; (J) 1 500 tareas y 3 000 registros de horas: menos de 4 s la primera vez y menos de 1 s después. Además: migración 015 repetida, parámetros solo para la administración con auditoría, umbrales incoherentes rechazados, informe, imprimible y CSV, «Solo lo mío», sin rankings, y las 21 comprobaciones sin servidor de `tests/unit/analysis.php`. «Novedades 1.13» en el navegador recorre las seis pestañas, la sugerencia en la ficha, el simulador (simular, aplicar y revertir), los parámetros, el informe imprimible y el móvil. También se probó actualizar una base con datos de 1.12.0 (migración 015 aplicada dos veces: 105 tareas, 26 proyectos, 21 registros de horas y 15 sprints sin pérdidas, y las seis pestañas abren sin errores). **No probado:** Safari y Firefox, MySQL 8 y el servidor real de HestiaCP.
 
@@ -680,7 +728,7 @@ Resultados **reales**, generados por las propias pruebas el 17/11/2026, instalan
 - ✅ Enlace: Invitación: la carpeta aparece una sola vez
 - ✅ Enlace: Enlace copiado de una tarea: la carpeta aparece una sola vez
 - ✅ Enlace: Dirección de regreso de Google: la carpeta aparece una sola vez
-- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.12.0)
+- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.14.0)
 - ✅ El mensaje de cuenta creada trae el enlace exacto de inicio de sesión
 - ✅ Ese enlace abre la página de inicio de sesión
 - ✅ Con los datos del mensaje se entra a Borealis
@@ -1124,6 +1172,224 @@ Resultados **reales**, generados por las propias pruebas el 17/11/2026, instalan
 - ✅ Las seis vistas de Monitoreo cargan para administración, gestión, colaboración y alguien ajeno
 - ✅ El menú principal tiene «Monitoreo» (y Reportes sigue disponible dentro)
 
+### 1.13 · Análisis y apoyo a decisiones
+
+- ✅ Fórmulas: Cumplimiento: 15 de 20 = 75 % con numerador y denominador
+- ✅ Fórmulas: Sin denominador no hay porcentaje (no divide por cero)
+- ✅ Fórmulas: Mediana impar y par
+- ✅ Fórmulas: Percentil 25 y 75 con interpolación
+- ✅ Fórmulas: Desviaciones parecidas (prompt: 4→6, 5→7, 3→5, 6→8, 4→6) no se descartan
+- ✅ Fórmulas: Un valor extremo (10× lo estimado) se aparta y se cuenta
+- ✅ Fórmulas: Con menos de 5 valores no se descarta nada
+- ✅ Fórmulas: Tendencia de mejora 70 → 82 → 88 (+18 puntos)
+- ✅ Fórmulas: Prueba C: con solo 2 períodos suficientes → «No hay datos suficientes para identificar una tendencia confiable.»
+- ✅ Fórmulas: Cambios pequeños se informan como «estable»
+- ✅ Fórmulas: Restante: horas anotadas > estimación − registradas, nunca negativo
+- ✅ Fórmulas: Capacidad restante proporcional a los días laborables
+- ✅ Fórmulas: Días laborables entre dos fechas (lunes 2026-11-16 a domingo 22)
+- ✅ Fórmulas: Riesgo: 4 puntos = elevado, 2 = moderado, 1 = bajo, sin datos = «Sin datos suficientes»
+- ✅ Fórmulas: Para 12 h de sobrecarga se proponen A y B (13 h)
+- ✅ Fórmulas: Prueba E: 22 h pendientes con 12 h de capacidad y una bloqueada → riesgo elevado (3 + 1 puntos)
+- ✅ Fórmulas: …explicado en una frase con las cifras y sin probabilidad
+- ✅ Fórmulas: Prueba F: sin la tarea de 12 h quedan 10 h pendientes, 2 h de margen y riesgo bajo
+- ✅ Fórmulas: Sin horas disponibles configuradas el sprint queda «Sin datos suficientes»
+- ✅ Fórmulas: Con la mitad de las tareas sin estimar también
+- ✅ Fórmulas: Prueba D (texto): «supera la capacidad disponible en 18 horas»
+- ✅ Migración 015: dos tablas nuevas y tres índices
+- ✅ La migración 015 se puede repetir sin errores
+- ✅ Prueba A: 15 a tiempo y 5 fuera de plazo → 75 % de cumplimiento entre las 20 finalizadas con fecha válida
+- ✅ …con el denominador explícito y las 2 finalizadas sin fecha listadas como excluidas (las 3 pendientes no se mezclan)
+- ✅ …y 25 % finalizadas fuera de plazo (5 de 20)
+- ✅ Cada indicador explica su fórmula, lo que se cuenta y lo que queda fuera («¿Cómo se calcula?»)
+- ✅ Preparación: cinco tareas «Informe» con etiqueta, horas estimadas y registradas
+- ✅ Prueba B: con 5 tareas comparables Borealis sugiere a partir del historial y muestra la muestra usada
+- ✅ …«desviación habitual de aproximadamente 2 h sobre su estimación inicial», con origen y período
+- ✅ …y para una estimación de 4 h sugiere 6 h (mediana de registrado ÷ estimado = 1,5)
+- ✅ Consultar la sugerencia no modifica ninguna estimación
+- ✅ Las categorías no se mezclan: sin etiqueta no hay tareas comparables (las «Informe» no cuentan)
+- ✅ La ficha de la tarea ofrece «Sugerencia según el historial» junto al estimado (opcional)
+- ✅ El diálogo de nueva tarea ofrece consultar el historial
+- ✅ Prueba C: con 2 tareas finalizadas Borealis dice «No hay datos suficientes para identificar una tendencia confiable.»
+- ✅ …y no inventa patrones ni tendencias (ningún «Mejora» ni «Empeora»)
+- ✅ El resumen tampoco genera recomendaciones estadísticas y avisa en «Calidad de los datos»
+- ✅ …ni sugiere estimaciones: «No hay suficientes tareas comparables» con cuántas hay
+- ✅ Preparación: equipo con Ana (40 h semanales) y Gema (sin horas configuradas)
+- ✅ Prueba D: la semana próxima muestra 40 h de capacidad, 58 h planificadas y 18 h de diferencia
+- ✅ …con «La carga planificada supera la capacidad disponible en 18 horas…» y alternativas de reorganización
+- ✅ …y quien no tiene horas configuradas se lista aparte, sin inventar su capacidad
+- ✅ …y el resumen recomienda revisar esa semana, con evidencia y confianza
+- ✅ Preparación: sprint activo con 22 h, 12 h disponibles para Beto y una tarea bloqueada
+- ✅ Prueba E: el sprint aparece con «Riesgo elevado»
+- ✅ …explicado: «mantiene 22 h estimadas de trabajo pendiente y dispone de 12 h de capacidad planificada» y «una tarea bloqueada»
+- ✅ …como clasificación por reglas, sin porcentaje de probabilidad
+- ✅ Prueba F: simular el traslado de la tarea de 12 h deja 10 h pendientes y 2 h de margen en el escenario
+- ✅ …compara «Estado actual» con «Escenario simulado» (riesgo elevado → bajo)
+- ✅ …sin modificar la base de datos real
+- ✅ Resolver el bloqueo y subir la capacidad se simulan, y el bloqueo queda marcado como hipotético
+- ✅ La pestaña Escenarios abre el simulador con la tarea propuesta ya trasladada
+- ✅ Un colaborador no puede aplicar escenarios (403) y nada cambia
+- ✅ Sin confirmación explícita no se aplica (422)
+- ✅ Si los datos cambiaron desde la simulación (huella distinta) se rechaza con 409 y nada cambia
+- ✅ Prueba G: quien gestiona el proyecto confirma y los cambios se aplican (tarea al sprint siguiente, 30 h disponibles)
+- ✅ …y quedan auditados: quién, cuándo, cada valor antes y después, y en la actividad
+- ✅ El escenario se puede revertir: la tarea vuelve al sprint y la capacidad a 12 h
+- ✅ …una sola vez
+- ✅ Si alguien cambió la tarea después, revertir se rechaza y explica qué cambió (no pisa su trabajo)
+- ✅ Un cambio sobre una tarea que no está en el sprint se rechaza
+- ✅ Prueba H: alguien ajeno no puede consultar el análisis de otro proyecto (404 del servidor)
+- ✅ …ni por la API, el CSV, la vista imprimible ni el simulador
+- ✅ …ni con un sprint ajeno en la URL
+- ✅ Su propio Análisis carga y no menciona proyectos ajenos
+- ✅ Un colaborador del proyecto no puede usar el simulador (403)
+- ✅ Solo la administración cambia los parámetros globales del análisis
+- ✅ …y el cambio queda registrado con el valor anterior y el nuevo
+- ✅ Umbrales incoherentes se rechazan (elevado ≤ moderado)
+- ✅ Prueba I: al cambiar una estimación la desviación mediana se recalcula (el resultado guardado se invalida)
+- ✅ …y al cambiar una fecha límite el riesgo del proyecto cuenta la nueva tarea vencida
+- ✅ Una segunda visita sin cambios reutiliza el resultado guardado
+- ✅ Preparación: 1 500 tareas y 3 000 registros de horas en un proyecto
+- ✅ Prueba J: con ese volumen cada pestaña responde en menos de 4 s la primera vez
+- ✅ …y en menos de 1 s cuando los datos no cambiaron (resultado guardado)
+- ✅ Las tareas finalizadas por período se buscan con el índice nuevo
+- ✅ Las seis pestañas de Análisis cargan para administración, gestión, colaboración y alguien ajeno
+- ✅ El menú principal tiene «Análisis» junto a Monitoreo
+- ✅ Informes: resumen, cumplimiento, evolución, carga, desviaciones, bloqueos, riesgos, recomendaciones y decisiones pendientes
+- ✅ Vista imprimible con las mismas secciones
+- ✅ CSV con cada indicador, su valor, numerador, denominador y excluidos
+- ✅ «Solo lo mío» limita los indicadores a las tareas propias (Gema no tiene ninguna)
+- ✅ Un integrante ve la capacidad sin el desglose de otras personas
+- ✅ Administración › Ajustes tiene «Parámetros de análisis» con valores por defecto
+- ✅ Ninguna vista de Análisis ordena ni puntúa personas (sin rankings)
+
+### 1.14 · Migración 016
+
+- ✅ Migración 016: cuatro tablas nuevas y 16 columnas
+- ✅ La migración 016 se puede repetir sin errores
+
+### 1.14 · Tarea programada (notificaciones con Borealis cerrado)
+
+- ✅ bin/notify.php deja constancia de cada ejecución (inicio, fin, resultado, origen «cli»)
+- ✅ …y sigue imprimiendo su resumen como antes
+- ✅ Administración › Notificaciones dice que la tarea programada funciona y cómo configurarla en HestiaCP
+- ✅ …y a la administración de la instalación le da la dirección /cron/run con su clave
+- ✅ La clave no se guarda en claro (storage/cron.json va cifrado)
+- ✅ /cron/run sin clave o con una clave equivocada responde 403 y no ejecuta nada
+- ✅ …y si la última ejecución fue hace menos de un minuto no la repite
+- ✅ Con la clave (en la dirección o en la cabecera X-Borealis-Token) ejecuta la tarea y queda registrada como «http»
+- ✅ …sin abrir sesión ni dejar cookies
+- ✅ Solo la administración de la instalación puede cambiar la clave
+- ✅ …y alguien sin permisos no ve la página
+- ✅ Al generar otra clave, la anterior deja de funcionar
+- ✅ Si la tarea programada deja de ejecutarse, Administración y el perfil lo avisan
+- ✅ …y al volver a ejecutarse el aviso desaparece
+- ✅ La dirección /cron/run crea los recordatorios de quien no tiene Borealis abierto
+- ✅ …sin repetirlos al ejecutar también el cron por línea de comandos
+
+### 1.14 · Envíos a dispositivos: registro, reintentos y renovación
+
+- ✅ Para una persona nueva las notificaciones al dispositivo vienen activadas (solo falta el permiso del navegador)
+- ✅ El inicio invita a activar las notificaciones en este dispositivo
+- ✅ Activar el dispositivo guarda la suscripción
+- ✅ Si el servicio de notificaciones falla de forma pasajera (503) el envío queda registrado para reintentar, con su error
+- ✅ …el reintento espera a su hora (no reintenta antes)
+- ✅ La tarea programada lo reintenta y llega (2.º intento), con el contenido del aviso
+- ✅ …y nunca se envía dos veces
+- ✅ Un aviso que se leyó mientras esperaba el reintento ya no se envía
+- ✅ Con dos dispositivos se registra un envío por dispositivo: uno llega y el otro falla con un error permanente que no se reintenta
+- ✅ Administración › Notificaciones muestra los envíos fallidos con su motivo (sin direcciones de dispositivos)
+- ✅ Renovar una suscripción sin probar la anterior (clave auth) se rechaza
+- ✅ Cuando el navegador cambia la suscripción, el service worker la renueva sola sin sesión y sin duplicar el dispositivo
+- ✅ El service worker atiende «pushsubscriptionchange»
+- ✅ Quien apagó las notificaciones del dispositivo no las recibe (se respeta su preferencia)
+- ✅ …y al activar de nuevo un dispositivo se encienden
+- ✅ Sin cron, una visita cualquiera ejecuta la tarea tras responder (como mucho cada 5 minutos)
+
+### 1.14 · Registro de actividad y auditoría
+
+- ✅ Cambiar una fecha guarda quién, cuándo, antes, después y el motivo, en la categoría Calendario
+- ✅ Historial del calendario: creación, reprogramación (antes y después) y cancelación de un evento
+- ✅ El registro se filtra por categoría y proyecto, y muestra el antes, el después y el motivo
+- ✅ …también por persona, acción y período
+- ✅ Se exporta a CSV (UTF-8, separado por «;») con los mismos filtros
+- ✅ Quien no tiene permiso de auditoría no ve ni exporta el registro
+- ✅ La integridad del registro se comprueba (cadena de huellas)
+- ✅ Una modificación hecha fuera de Borealis se detecta e indica desde qué registro
+- ✅ …también una eliminación
+- ✅ …y un registro al que se le quitó la huella para que pase por anterior a la 1.14
+- ✅ Borealis no ofrece ninguna forma de editar o borrar el registro
+- ✅ Cambiar las horas semanales de alguien queda con antes y después
+- ✅ El registro nunca guarda contraseñas, tokens, claves ni datos de dispositivos
+
+### 1.14 · Estimación de horas del trabajador
+
+- ✅ La estimación de quien gestiona el proyecto es la de administración y, a la vez, la acordada
+- ✅ La trabajadora no puede cambiar lo acordado sin un motivo
+- ✅ Con un motivo, su estimación (14 h) queda por revisar y lo acordado no cambia solo
+- ✅ …y quien gestiona el proyecto recibe el aviso con el motivo
+- ✅ Quien no es responsable de la tarea no puede estimarla
+- ✅ La trabajadora no puede aprobar su propia ampliación
+- ✅ Monitoreo levanta «ampliación importante de la estimación» (40 % sobre lo acordado) para quien gestiona
+- ✅ La ficha de la tarea muestra administración, trabajador, acordado, real y diferencia, con el historial
+- ✅ Quien gestiona acuerda el valor (13 h): pasa a ser el acordado y la revisión se cierra
+- ✅ Cada paso queda en el historial de estimaciones (quién, tipo, antes, después, motivo)
+- ✅ …y en el registro de auditoría con antes, después y motivo
+- ✅ …y la trabajadora recibe el acuerdo
+- ✅ La alerta de ampliación se cierra sola cuando ya no aplica
+- ✅ Superar el tiempo acordado (15 de 13 h) levanta una alerta para quien gestiona
+- ✅ …que da las cifras y explica la situación sin calificarla como bajo rendimiento
+- ✅ Sin horas acordadas, la primera estimación de la trabajadora se vuelve el plan sin pedir motivo
+
+### 1.14 · Trabajos rápidos y carga al asignar
+
+- ✅ Un trabajo rápido se crea sin configurar ningún proyecto
+- ✅ …con su responsable, horas, fecha y tipo (la solicitud imprevista cuenta como fuera de la planificación)
+- ✅ Se pueden crear varios seguidos y se reutiliza el mismo espacio
+- ✅ Quien no puede asignar trabajo no crea trabajos rápidos para otras personas
+- ✅ Quien coordina asigna un trabajo rápido a otra persona y ella recibe el aviso
+- ✅ En un trabajo rápido se registran horas
+- ✅ El espacio de trabajos rápidos no aparece entre los proyectos, pero tiene su propia página semanal
+- ✅ …y aparecen en Mi trabajo
+- ✅ Al asignar se ve la carga de la semana de cada persona, con los trabajos rápidos incluidos
+- ✅ Quien no asigna trabajo solo ve su propia carga
+- ✅ El diálogo de nueva tarea ofrece «Trabajos rápidos», la carga del responsable y «Crear y añadir otra»
+- ✅ …y una tarea creada con «Trabajos rápidos» desde ese diálogo va al espacio de trabajos rápidos
+- ✅ Con 15 de 15 h usadas y trabajo pendiente se avisa (también con trabajos rápidos)
+
+### 1.14 · Crear proyectos más simple
+
+- ✅ Basta el nombre: la clave se sugiere sola
+- ✅ Al crear se eligen responsable (gestiona), integrantes, fechas y objetivo en un paso
+- ✅ …y cada integrante recibe el aviso
+- ✅ Una persona que no es del espacio se rechaza
+- ✅ El diálogo de nuevo proyecto separa lo esencial de las opciones avanzadas
+
+### 1.14 · Carta Gantt
+
+- ✅ Preparación: tareas con fechas, subtarea, hito, dependencia y una fecha cambiada
+- ✅ La carta Gantt se arma sola con tareas, subtareas, responsables y avance
+- ✅ …con hitos, dependencias y retrasos
+- ✅ …y compara la planificación original con la actual
+- ✅ Escalas por días, semanas y meses
+- ✅ Se actualiza sola al cambiar una fecha (sin rehacer nada)
+- ✅ Solo quien gestiona el proyecto fija una nueva planificación original
+- ✅ Al fijarla, la comparación vuelve a cero y el cambio queda en el registro
+- ✅ Quien colabora también ve la carta Gantt
+- ✅ Quien no pertenece al proyecto no la ve
+
+### 1.14 · Análisis histórico por período
+
+- ✅ Análisis por semana, mes, trimestre y año
+- ✅ «¿Qué ocurrió en el período?» cuenta los trabajos creados y finalizados del período (las subtareas cuentan con su tarea)
+- ✅ …filtrado por persona, con las horas registradas e imprevistos aparte
+- ✅ Quien no administra no puede filtrar por otra persona
+
+### 1.14 · Actualización desde la 1.13
+
+- ✅ Al actualizar se conserva todo: la estimación existente pasa a ser la de administración
+- ✅ …la planificación original sale de la primera fecha registrada (antes de cualquier cambio)
+- ✅ …quien tenía un dispositivo activado pero el aviso apagado por el error de la 1.13 lo recupera; quien no tenía dispositivo, no se toca
+- ✅ …y las tareas, horas y avisos existentes siguen ahí
+
 ## Navegador (Chromium)
 
 ### Instalación desde el navegador
@@ -1439,8 +1705,55 @@ Resultados **reales**, generados por las propias pruebas el 17/11/2026, instalan
 - ✅ En el móvil, Monitoreo › risks cabe sin desplazamiento horizontal
 - ✅ En el móvil, Monitoreo › report cabe sin desplazamiento horizontal
 
-### Diseño adaptable
+### Novedades 1.13
 
+- ✅ El menú lleva a «Análisis»
+- ✅ Arriba: estado, cumplimiento, capacidad proyectada y riesgos
+- ✅ El sprint aparece con riesgo elevado y su porqué
+- ✅ «Por qué» muestra cada factor como hecho, con sus puntos
+- ✅ Recomendaciones con problema, evidencia, acción, impacto y confianza
+- ✅ Tendencias: cumplimiento con numerador y denominador (4 de 6)
+- ✅ Con pocos meses de historial no inventa tendencias
+- ✅ Estimaciones: sugerencia a partir de tareas comparables, con su origen
+- ✅ «Usar» rellena la estimación y se guarda solo porque la persona lo pidió
+- ✅ Planificación: la semana próxima avisa de la sobrecarga con alternativas
+- ✅ Escenarios: trasladar la tarea de 12 h baja el riesgo en el escenario simulado
+- ✅ …sin tocar la tarea real
+- ✅ Aplicar exige marcar la confirmación
+- ✅ Al aplicarlo, la tarea pasa al sprint siguiente
+- ✅ Revertir devuelve la tarea al sprint original
+- ✅ Informes: nueve secciones interpretadas
+- ✅ En el móvil, Análisis › summary cabe sin desplazamiento horizontal
+- ✅ En el móvil, Análisis › trends cabe sin desplazamiento horizontal
+- ✅ En el móvil, Análisis › estimates cabe sin desplazamiento horizontal
+- ✅ En el móvil, Análisis › planning cabe sin desplazamiento horizontal
+- ✅ En el móvil, Análisis › scenarios cabe sin desplazamiento horizontal
+- ✅ En el móvil, Análisis › report cabe sin desplazamiento horizontal
+
+### Novedades 1.14
+
+- ✅ Al elegir responsable se ve su carga de la semana
+- ✅ «Crear y añadir otra» guarda y deja el diálogo abierto, vacío y con el mismo proyecto y responsable
+- ✅ «Crear tarea» guarda y cierra
+- ✅ Las dos aparecen en «Trabajos rápidos»
+- ✅ El formulario de trabajos rápidos queda listo para el siguiente (título vacío, tipo conservado)
+- ✅ …y el trabajo urgente aparece marcado como imprevisto
+- ✅ El espacio de trabajos rápidos no aparece entre los proyectos
+- ✅ «Esta semana» rellena la entrega
+- ✅ El proyecto se crea en un paso, con integrantes
+- ✅ La ficha muestra administración, trabajador, acordado y real
+- ✅ Cambiar lo acordado sin motivo se explica en el campo
+- ✅ Con un motivo queda «por revisar»
+- ✅ Quien gestiona ve «Acordar» con la propuesta
+- ✅ Al acordar se cierra la revisión y el acordado pasa a 9 h
+- ✅ La carta Gantt se muestra en el proyecto
+- ✅ …con barras para las tareas con fechas y el hito
+- ✅ Cambia a escala de meses
+- ✅ En el móvil la carta se desplaza dentro de su marco, sin desbordar la página
+- ✅ El registro de actividad lista los cambios
+- ✅ «Comprobar integridad» confirma la cadena
+- ✅ Administración › Notificaciones dice el estado de la tarea programada
+- ✅ Análisis por trimestre con «¿Qué ocurrió en el período?»
 - ✅ escritorio 1440×900: sin desplazamiento horizontal de página
 - ✅ portatil 1280×800: sin desplazamiento horizontal de página
 - ✅ tableta 820×1180: sin desplazamiento horizontal de página
@@ -1458,7 +1771,7 @@ Resultados **reales**, generados por las propias pruebas el 17/11/2026, instalan
 
 ## Capturas
 
-En `docs/capturas/`: escritorio (1440×900), portátil (1280×800), tableta (820×1180) y móvil (390×844) de Inicio, Mi trabajo, Proyectos, Resumen, Tablero, Lista, Calendario y Equipos, más el menú lateral en tableta y móvil, el detalle de tarea, el resumen al completar un proyecto y la importación. Novedades 1.1: cierre de tarea con comentario y horas, horas en el detalle, apariencia del proyecto, informe imprimible, control del sprint, reportes con horas, barra lateral y aviso de cuenta fantasma (archivos que empiezan por `11-`). Novedades 1.2: invitación con enlace, editar cuenta, equipo en el proyecto, varios responsables, personas en el tablero, perfil con horas e importación (archivos que empiezan por `12-`). Novedades 1.3: responsables seguidos, tablero con horas y «Sin disponibilidad», horas por persona en el sprint (archivos que empiezan por `13-`). Novedades 1.4: tutorial, sprints por estado, archivos en cuadrícula y lista, Apariencia y fondo Medieval (archivos que empiezan por `14-`). Novedades 1.12: Monitoreo (resumen, cumplimiento, carga, tiempos, alertas, informe), «Seguimiento» en la ficha, umbrales y móvil (archivos que empiezan por `40-`).
+En `docs/capturas/`: escritorio (1440×900), portátil (1280×800), tableta (820×1180) y móvil (390×844) de Inicio, Mi trabajo, Proyectos, Resumen, Tablero, Lista, Calendario y Equipos, más el menú lateral en tableta y móvil, el detalle de tarea, el resumen al completar un proyecto y la importación. Novedades 1.1: cierre de tarea con comentario y horas, horas en el detalle, apariencia del proyecto, informe imprimible, control del sprint, reportes con horas, barra lateral y aviso de cuenta fantasma (archivos que empiezan por `11-`). Novedades 1.2: invitación con enlace, editar cuenta, equipo en el proyecto, varios responsables, personas en el tablero, perfil con horas e importación (archivos que empiezan por `12-`). Novedades 1.3: responsables seguidos, tablero con horas y «Sin disponibilidad», horas por persona en el sprint (archivos que empiezan por `13-`). Novedades 1.4: tutorial, sprints por estado, archivos en cuadrícula y lista, Apariencia y fondo Medieval (archivos que empiezan por `14-`). Novedades 1.12: Monitoreo (resumen, cumplimiento, carga, tiempos, alertas, informe), «Seguimiento» en la ficha, umbrales y móvil (archivos que empiezan por `40-`). Novedades 1.14: trabajos rápidos, nuevo proyecto, estimaciones, carta Gantt (escritorio y móvil), auditoría, Administración › Notificaciones y Análisis por período (archivos `50-` a `56-`).
 
 ## Cómo repetirlas
 
