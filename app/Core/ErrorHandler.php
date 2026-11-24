@@ -41,5 +41,7 @@ final class ErrorHandler
     {
         $line = sprintf("[%s] %s: %s in %s:%d\n%s\n\n", gmdate('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString());
         @file_put_contents(BASE_PATH . '/storage/logs/error.log', $line, FILE_APPEND | LOCK_EX);
+        // 1.15: also in the Master Log, without the trace (Administración › Registro maestro › Errores)
+        try { \Borealis\Services\Activity::systemError($e); } catch (\Throwable) {}
     }
 }

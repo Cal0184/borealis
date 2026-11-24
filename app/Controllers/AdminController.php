@@ -57,36 +57,70 @@ final class AdminController
         ]);
     }
 
+    /**
+     * 1.15 · Registro maestro: one log for everything (work, administration, automatic actions and
+     * errors), newest first, grouped by day, week or month. Pages go by id («older than n»), which
+     * stays fast with millions of rows. Nothing here edits or deletes an entry.
+     */
     public function audit(Request $r): Response
     {
         $this->guard('audit.view');
         $f = self::auditFilters($r);
-        $page = max(1, (int)$r->q('page', 1));
-        $rows = \Borealis\Services\Activity::search($f, 51, ($page - 1) * 50);
+        $rows = \Borealis\Services\Activity::search($f, 101, 0);
+        $hasMore = count($rows) > 100;
+        $rows = array_slice($rows, 0, 100);
         $verify = $r->q('verify') ? \Borealis\Services\Activity::verify() : null;
         $projects = Database::get()->all('SELECT id, name, project_key FROM projects WHERE workspace_id = ? ORDER BY name', [Policy::wsId()]);
-        return View::page('admin/audit', $this->base('audit') + ['rows' => array_slice($rows, 0, 50), 'hasMore' => count($rows) > 50, 'page' => $page, 'members' => Workspaces::members(),
-            'filters' => array_filter($f, fn($v) => $v !== null && $v !== ''), 'projects' => $projects, 'actions' => \Borealis\Services\Activity::actions(), 'verify' => $verify]);
+        $group = in_array($r->q('group'), ['day', 'week', 'month'], true) ? (string)$r->q('group') : 'day';
+        $filters = array_filter($f, fn($v) => $v !== null && $v !== '');
+        unset($filters['before']);
+        return View::page('admin/audit', $this->base('audit') + ['rows' => $rows, 'hasMore' => $hasMore, 'next' => $hasMore ? (int)end($rows)['id'] : null, 'paged' => !empty($f['before']), 'members' => Workspaces::members(),
+            'filters' => $filters, 'group' => $group, 'projects' => $projects, 'actions' => \Borealis\Services\Activity::actions(), 'verify' => $verify, 'title' => 'Registro maestro']);
     }
 
     /** 1.14 · the same search as a CSV file (opens in Excel / LibreOffice / Google Sheets). */
     public function auditCsv(Request $r): Response
     {
         $this->guard('audit.view');
-        $rows = \Borealis\Services\Activity::search(self::auditFilters($r), 5000, 0);
+        $A = \Borealis\Services\Activity::class;
+        $rows = $A::search(self::auditFilters($r), 5000, 0);
         $out = fopen('php://temp', 'w+');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Fecha (UTC)', 'Persona', 'Categoría', 'Acción', 'Resumen', 'Proyecto', 'Antes', 'Después', 'Motivo', 'Origen'], ';');
-        foreach ($rows as $a) fputcsv($out, [$a['created_at'], $a['user_name'] ?? 'Sistema', \Borealis\Services\Activity::CATEGORIES[$a['category'] ?? ''] ?? '', $a['action'], $a['summary'], $a['project_name'] ?? '', $a['before_data'] ?? '', $a['after_data'] ?? '', $a['reason'] ?? '', \Borealis\Services\Activity::SOURCES[$a['source'] ?? ''] ?? ''], ';');
+        fputcsv($out, ['N.º', 'Fecha (UTC)', 'Persona', 'Tipo', 'Categoría', 'Acción', 'Resumen', 'Proyecto', 'Antes', 'Después', 'Motivo', 'Origen', 'Resultado', 'Enlace'], ';');
+        foreach ($rows as $a) fputcsv($out, [$a['id'], $a['created_at'], $a['user_name'] ?? 'Sistema', $A::KINDS[$A::kind($a)], $A::CATEGORIES[$a['category'] ?? ''] ?? '', $a['action'], $a['summary'], $a['project_name'] ?? '', $a['before_data'] ?? '', $a['after_data'] ?? '', $a['reason'] ?? '',
+            $A::SOURCES[$a['source'] ?? ''] ?? '', $A::RESULTS[$a['result'] ?? ''] ?? 'Hecho', self::absolute($A::link($a))], ';');
         rewind($out);
         $csv = (string)stream_get_contents($out);
-        return new Response($csv, 200, ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="borealis-historial-' . date('Y-m-d') . '.csv"', 'Cache-Control' => 'no-store']);
+        return new Response($csv, 200, ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="borealis-registro-' . date('Y-m-d') . '.csv"', 'Cache-Control' => 'no-store']);
+    }
+
+    /** 1.15 · the same search as JSON (for archiving or another tool); the hashes go along so it can be checked. */
+    public function auditJson(Request $r): Response
+    {
+        $this->guard('audit.view');
+        $A = \Borealis\Services\Activity::class;
+        $items = array_map(fn($a) => [
+            'id' => (int)$a['id'], 'fecha_utc' => $a['created_at'], 'persona' => $a['user_name'] ?? null, 'persona_id' => $a['user_id'] ? (int)$a['user_id'] : null,
+            'tipo' => $A::kind($a), 'categoria' => $a['category'] ?? null, 'accion' => $a['action'], 'elemento' => ['tipo' => $a['entity_type'], 'id' => $a['entity_id'] ? (int)$a['entity_id'] : null, 'enlace' => self::absolute($A::link($a))],
+            'proyecto' => $a['project_id'] ? ['id' => (int)$a['project_id'], 'nombre' => $a['project_name']] : null, 'tarea_id' => $a['task_id'] ? (int)$a['task_id'] : null,
+            'resumen' => $a['summary'], 'antes' => $a['before_data'] ? json_decode($a['before_data'], true) : null, 'despues' => $a['after_data'] ? json_decode($a['after_data'], true) : null,
+            'motivo' => $a['reason'] ?? null, 'origen' => $a['source'] ?? null, 'resultado' => $a['result'] ?? 'ok', 'huella' => $a['row_hash'] ?? null, 'huella_anterior' => $a['prev_hash'] ?? null,
+        ], $A::search(self::auditFilters($r), 5000, 0));
+        $body = json_encode(['espacio' => Policy::workspace()['name'], 'generado_utc' => now(), 'registros' => $items], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        return new Response((string)$body, 200, ['Content-Type' => 'application/json; charset=utf-8', 'Content-Disposition' => 'attachment; filename="borealis-registro-' . date('Y-m-d') . '.json"', 'Cache-Control' => 'no-store']);
+    }
+
+    private static function absolute(?string $path): string
+    {
+        if (!$path) return '';
+        $base = rtrim((string)config('app.url', ''), '/');
+        return $base !== '' && str_starts_with($path, '/') ? $base . preg_replace('~^' . preg_quote(rtrim((string)config('app.base_path', ''), '/'), '~') . '~', '', $path) : $path;
     }
 
     private static function auditFilters(Request $r): array
     {
         $f = [];
-        foreach (['user_id', 'project_id', 'category', 'action', 'source', 'from', 'to', 'q', 'type'] as $k) $f[$k] = is_scalar($r->q($k)) ? trim((string)$r->q($k)) : null;
+        foreach (['user_id', 'project_id', 'category', 'action', 'source', 'from', 'to', 'q', 'type', 'kind', 'result', 'before'] as $k) $f[$k] = is_scalar($r->q($k)) ? trim((string)$r->q($k)) : null;
         // quick periods: hoy, 7 / 30 / 90 días, or this week, month, quarter or year (the same as Análisis)
         $f['period'] = null;
         if (is_string($r->q('period')) && $r->q('period') !== '') {

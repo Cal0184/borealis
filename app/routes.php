@@ -73,6 +73,7 @@ $r->get('/admin/members', [C\AdminController::class, 'members']);
 $r->get('/admin/roles', [C\AdminController::class, 'roles']);
 $r->get('/admin/audit', [C\AdminController::class, 'audit']);
 $r->get('/admin/audit.csv', [C\AdminController::class, 'auditCsv']);
+$r->get('/admin/audit.json', [C\AdminController::class, 'auditJson']);
 $r->get('/admin/notifications', [C\AdminController::class, 'notifications']);
 $r->post('/api/admin/cron-token', [Api\WorkspaceApi::class, 'rotateCronToken']);
 $r->get('/admin/data', [C\AdminController::class, 'data']);

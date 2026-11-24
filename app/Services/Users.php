@@ -191,7 +191,11 @@ final class Users
         $ok = $u && password_verify($password, $u['password_hash']) && (int)$u['is_active'] === 1 && (int)($u['is_ghost'] ?? 0) === 0;
         if (!$u) password_verify($password, self::dummyHash()); // equalize timing with the real algorithm
         $db->insert('login_attempts', ['email' => $email, 'ip' => $ip, 'success' => $ok ? 1 : 0, 'created_at' => now()]);
-        if (!$ok) throw HttpException::invalid(['email' => 'Correo o contraseña incorrectos.'], 'Correo o contraseña incorrectos.');
+        if (!$ok) {
+            // 1.15: a refused sign-in of an existing account goes to its Master Log (unknown addresses do not)
+            if ($u) Activity::security('login_failed', (int)$u['id'], 'Intento de inicio de sesión rechazado', $ip, 'denied');
+            throw HttpException::invalid(['email' => 'Correo o contraseña incorrectos.'], 'Correo o contraseña incorrectos.');
+        }
         if (password_needs_rehash($u['password_hash'], defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT)) {
             $u['password_hash'] = Auth::hash($password);
             $db->update('users', ['password_hash' => $u['password_hash']], 'id = ?', [$u['id']]);

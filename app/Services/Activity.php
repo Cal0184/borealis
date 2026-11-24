@@ -27,10 +27,27 @@ final class Activity
         'project' => 'Proyectos', 'task' => 'Tareas', 'assignment' => 'Asignaciones', 'estimate' => 'Estimaciones', 'time' => 'Horas',
         'calendar' => 'Calendario', 'sprint' => 'Sprints', 'team' => 'Usuarios y equipos', 'permission' => 'Permisos', 'settings' => 'Configuración',
         'integration' => 'Integraciones', 'deletion' => 'Eliminaciones', 'system' => 'Acciones automáticas', 'other' => 'Otros',
+        // 1.15
+        'security' => 'Accesos y seguridad', 'notification' => 'Notificaciones', 'automation' => 'Automatizaciones', 'error' => 'Errores del sistema',
     ];
-    public const SOURCES = ['web' => 'Borealis', 'system' => 'Automático', 'google' => 'Google', 'import' => 'Importación', 'cli' => 'Consola', 'discord' => 'Discord', 'github' => 'GitHub'];
+    public const SOURCES = ['web' => 'Borealis', 'system' => 'Automático', 'google' => 'Google', 'import' => 'Importación', 'cli' => 'Consola', 'discord' => 'Discord', 'github' => 'GitHub', 'automation' => 'Automatización'];
+    /** 1.15 · how an entry is shown in the Master Log (colour and filter). */
+    public const KINDS = ['normal' => 'Trabajo', 'admin' => 'Administración', 'auto' => 'Automático', 'error' => 'Errores y rechazos'];
+    public const RESULTS = ['error' => 'Error', 'denied' => 'Rechazado'];
+    private const ADMIN_CATS = ['permission', 'settings', 'team', 'security'];
+    private const AUTO_SOURCES = ['system', 'google', 'github', 'discord', 'import', 'automation'];
 
     private static ?bool $ready = null;
+    private static ?bool $v115 = null;
+
+    /** 1.15 columns (result, retention base) exist */
+    public static function v115(): bool
+    {
+        if (self::$v115 === null) {
+            try { self::$v115 = (bool)Database::get()->value("SELECT 1 FROM schema_migrations WHERE version = '017_v115'"); } catch (\Throwable) { self::$v115 = false; }
+        }
+        return self::$v115;
+    }
 
     public static function ready(): bool
     {
@@ -42,6 +59,8 @@ final class Activity
 
     /**
      * $audit (1.14, optional): before, after (arrays), reason (string), category, source.
+     * 1.15: result ('error' | 'denied'; done when left out) and user_id (who, when there is no session:
+     * a failed sign-in, or null for «Sistema»).
      */
     public static function log(string $action, string $entityType, ?int $entityId, string $summary, ?int $projectId = null, ?int $taskId = null, array $data = [], ?int $workspaceId = null, array $audit = []): void
     {
@@ -50,7 +69,7 @@ final class Activity
             'workspace_id' => $workspaceId ?? Policy::wsId(),
             'project_id' => $projectId,
             'task_id' => $taskId,
-            'user_id' => Auth::id() ?: null,
+            'user_id' => array_key_exists('user_id', $audit) ? ($audit['user_id'] ? (int)$audit['user_id'] : null) : (Auth::id() ?: null),
             'action' => mb_substr($action, 0, 40),
             'entity_type' => mb_substr($entityType, 0, 30),
             'entity_id' => $entityId,
@@ -66,6 +85,7 @@ final class Activity
             'reason' => isset($audit['reason']) && trim((string)$audit['reason']) !== '' ? mb_substr(trim((string)$audit['reason']), 0, 500) : null,
             'source' => $audit['source'] ?? self::$source ?? (Scheduler::running() ? 'system' : (PHP_SAPI === 'cli' ? 'cli' : 'web')),
         ];
+        if (self::v115()) $row['result'] = isset($audit['result'], self::RESULTS[$audit['result']]) ? $audit['result'] : null;
         $db->transaction(function (Database $db) use ($row) {
             $ws = (int)$row['workspace_id'];
             $db->run('INSERT IGNORE INTO audit_chain (workspace_id, head, last_id) VALUES (?,?,0)', [$ws, str_repeat('0', 64)]);
@@ -81,7 +101,10 @@ final class Activity
     public static function hash(array $r): string
     {
         $f = ['id', 'workspace_id', 'project_id', 'task_id', 'user_id', 'action', 'entity_type', 'entity_id', 'category', 'summary', 'data', 'before_data', 'after_data', 'reason', 'source', 'created_at', 'prev_hash'];
-        return hash('sha256', implode("\x1f", array_map(fn($k) => $r[$k] === null ? "\x00" : (string)$r[$k], $f)));
+        $base = implode("\x1f", array_map(fn($k) => ($r[$k] ?? null) === null ? "\x00" : (string)$r[$k], $f));
+        // 1.15: the result joins the hash only when there is one, so every row written before keeps its hash
+        if (($r['result'] ?? null) !== null) $base .= "\x1fresult=" . $r['result'];
+        return hash('sha256', $base);
     }
 
     /**
@@ -92,9 +115,11 @@ final class Activity
         $db = Database::get();
         $ws = $wsId ?? Policy::wsId();
         $legacy = (int)$db->value('SELECT COUNT(*) FROM activity WHERE workspace_id = ? AND row_hash IS NULL', [$ws]);
-        $prev = str_repeat('0', 64);
+        $head = $db->one('SELECT * FROM audit_chain WHERE workspace_id = ?', [$ws]);
+        // 1.15: after archiving, the chain continues from the last archived row
+        $prev = ($head['base_hash'] ?? null) ?: str_repeat('0', 64);
         $checked = 0;
-        $last = 0;
+        $last = (int)($head['base_id'] ?? 0);
         $broken = null;
         do {
             $rows = $db->all('SELECT * FROM activity WHERE workspace_id = ? AND row_hash IS NOT NULL AND id > ? ORDER BY id LIMIT 2000', [$ws, $last]);
@@ -105,10 +130,9 @@ final class Activity
                 $prev = (string)$r['row_hash'];
             }
         } while (count($rows) === 2000);
-        $head = $db->one('SELECT head, last_id FROM audit_chain WHERE workspace_id = ?', [$ws]);
         // the newest rows were deleted: the chain ends before the head says it should
         if ($broken === null && $head && $checked > 0 && ($head['head'] !== $prev || (int)$head['last_id'] !== $last)) $broken = (int)$head['last_id'];
-        if ($broken === null && $head && $checked === 0 && (int)$head['last_id'] > 0) $broken = (int)$head['last_id'];
+        if ($broken === null && $head && $checked === 0 && (int)$head['last_id'] > (int)($head['base_id'] ?? 0)) $broken = (int)$head['last_id'];
         // a row whose hash was blanked to pass as «before 1.14»: no unchained row may come after the first chained one
         if ($broken === null && $checked > 0) {
             $first = (int)$db->value('SELECT MIN(id) FROM activity WHERE workspace_id = ? AND row_hash IS NOT NULL', [$ws]);
@@ -131,6 +155,10 @@ final class Activity
 
     public static function categoryOf(string $action, string $entityType): string
     {
+        if (in_array($action, ['login', 'logout', 'login_failed', 'password_changed', 'password_reset', 'denied'], true)) return 'security';
+        if (str_starts_with($action, 'auto_') || $entityType === 'automation') return 'automation';
+        if (str_starts_with($action, 'notify_') || $entityType === 'notification') return 'notification';
+        if ($action === 'system_error') return 'error';
         if (str_contains($action, 'deleted') || str_contains($action, 'removed') || $action === 'delete') return 'deletion';
         if (str_starts_with($action, 'estimate')) return 'estimate';
         if (str_starts_with($action, 'time_')) return 'time';
@@ -177,8 +205,8 @@ final class Activity
         [$where, $args] = self::where($f, $onlyProjects);
         $args[] = $limit;
         $args[] = $offset;
-        return Database::get()->all("SELECT a.*, u.name AS user_name, u.avatar_color, p.name AS project_name, p.project_key FROM activity a
-            LEFT JOIN users u ON u.id = a.user_id LEFT JOIN projects p ON p.id = a.project_id WHERE $where ORDER BY a.id DESC LIMIT ? OFFSET ?", $args);
+        return Database::get()->all("SELECT a.*, u.name AS user_name, u.avatar_color, p.name AS project_name, p.project_key, t.number AS task_number FROM activity a
+            LEFT JOIN users u ON u.id = a.user_id LEFT JOIN projects p ON p.id = a.project_id LEFT JOIN tasks t ON t.id = a.task_id WHERE $where ORDER BY a.id DESC LIMIT ? OFFSET ?", $args);
     }
 
     public static function where(array $f, ?array $onlyProjects = null): array
@@ -204,6 +232,10 @@ final class Activity
         if (!empty($f['from']) && preg_match('/^\d{4}-\d\d-\d\d$/', (string)$f['from'])) { $where .= ' AND a.created_at >= ?'; $args[] = $f['from'] . ' 00:00:00'; }
         if (!empty($f['to']) && preg_match('/^\d{4}-\d\d-\d\d$/', (string)$f['to'])) { $where .= ' AND a.created_at <= ?'; $args[] = $f['to'] . ' 23:59:59'; }
         if (!empty($f['q'])) { $where .= ' AND a.summary LIKE ?'; $args[] = '%' . str_replace(['%', '_'], ['\%', '\_'], mb_substr((string)$f['q'], 0, 80)) . '%'; }
+        // 1.15
+        if (!empty($f['kind']) && isset(self::KINDS[$f['kind']])) $where .= ' AND ' . self::kindSql((string)$f['kind']);
+        if (!empty($f['result']) && self::v115() && isset(self::RESULTS[$f['result']])) { $where .= ' AND a.result = ?'; $args[] = (string)$f['result']; }
+        if (!empty($f['before']) && ctype_digit((string)$f['before'])) { $where .= ' AND a.id < ?'; $args[] = (int)$f['before']; }
         return [$where, $args];
     }
 
@@ -222,6 +254,93 @@ final class Activity
             'time' => "a.entity_type IN ('time','time_entry')",
             default => '0',
         };
+    }
+
+    /**
+     * 1.15 · the kind of an entry: «error» (failed or refused), «auto» (done by Borealis or an
+     * integration), «admin» (people, permissions, settings, access) or «normal» (everyday work).
+     */
+    public static function kind(array $a): string
+    {
+        $cat = $a['category'] ?? null ?: self::categoryOf((string)$a['action'], (string)$a['entity_type']);
+        if (!empty($a['result']) || $cat === 'error') return 'error';
+        if (in_array($a['source'] ?? '', self::AUTO_SOURCES, true) || in_array($cat, ['system', 'automation'], true)) return 'auto';
+        if (in_array($cat, self::ADMIN_CATS, true)) return 'admin';
+        return 'normal';
+    }
+
+    private static function kindSql(string $kind): string
+    {
+        $err = self::v115() ? "(a.result IS NOT NULL OR a.category = 'error')" : "a.category = 'error'";
+        $auto = "(a.source IN ('" . implode("','", self::AUTO_SOURCES) . "') OR a.category IN ('system','automation'))";
+        $admin = "a.category IN ('" . implode("','", self::ADMIN_CATS) . "')";
+        return match ($kind) {
+            'error' => $err,
+            'auto' => "(NOT $err AND $auto)",
+            'admin' => "(NOT $err AND NOT $auto AND $admin)",
+            default => "(NOT $err AND NOT $auto AND (a.category IS NULL OR NOT $admin))",
+        };
+    }
+
+    /** 1.15 · where the element of an entry lives (null when it has no page of its own or was deleted). */
+    public static function link(array $a): ?string
+    {
+        if (!empty($a['task_id']) && !empty($a['project_key']) && isset($a['task_number'])) return url('/tasks/' . $a['project_key'] . '-' . $a['task_number']);
+        return match ($a['entity_type'] ?? '') {
+            'project' => !empty($a['entity_id']) && !str_contains((string)$a['action'], 'deleted') ? url('/projects/' . (int)$a['entity_id']) : null,
+            'sprint' => !empty($a['project_id']) ? url('/projects/' . (int)$a['project_id'] . '/sprints') : null,
+            'team' => !empty($a['entity_id']) ? url('/teams/' . (int)$a['entity_id']) : null,
+            'user', 'member' => !empty($a['entity_id']) ? url('/people/' . (int)$a['entity_id']) : null,
+            'automation' => url('/admin/automations'),
+            default => !empty($a['project_id']) ? url('/projects/' . (int)$a['project_id']) : null,
+        };
+    }
+
+    /**
+     * 1.15 · a server error also goes to the Master Log (without the trace, paths or query values),
+     * at most once an hour for the same error, so the administration can see it without the server.
+     */
+    public static function systemError(\Throwable $e): void
+    {
+        static $busy = false;
+        if ($busy || !self::v115()) return;
+        $busy = true;
+        try {
+            $ws = Policy::wsIdOrNull();
+            if (!$ws) return;
+            $msg = preg_replace('/(SQLSTATE\[\w+\]).*/s', '$1', $e->getMessage());
+            $msg = mb_substr(get_class($e) . ': ' . preg_replace('~/[\w./-]+~', '…', (string)$msg), 0, 200);
+            $since = date('Y-m-d H:i:s', time() - 3600);
+            if (Database::get()->value("SELECT 1 FROM activity WHERE workspace_id = ? AND action = 'system_error' AND summary = ? AND created_at >= ? LIMIT 1", [$ws, $msg, $since])) return;
+            self::log('system_error', 'system', null, $msg, null, null, [], $ws, ['category' => 'error', 'result' => 'error', 'source' => 'system',
+                'after' => ['archivo' => basename($e->getFile()) . ':' . $e->getLine()]]);
+        } catch (\Throwable) {
+            // the error log on disk still has it
+        } finally { $busy = false; }
+    }
+
+    /**
+     * 1.15 · sign-in, sign-out and refused sign-in, in the person's workspace. Only the shortened
+     * address is kept (the last part is hidden) and never what was typed in the password field.
+     */
+    public static function security(string $action, int $userId, string $summary, string $ip = '', ?string $result = null): void
+    {
+        if (!self::ready()) return;
+        try {
+            $ws = Policy::wsIdOrNull() ?? Policy::homeWorkspace($userId);
+            if (!$ws) return;
+            self::log($action, 'user', $userId, $summary, null, null, [], $ws, ['category' => 'security', 'user_id' => $userId, 'result' => $result,
+                'after' => $ip !== '' ? ['red' => self::maskIp($ip)] : []]);
+        } catch (\Throwable $e) {
+            \Borealis\Core\ErrorHandler::log($e);
+        }
+    }
+
+    public static function maskIp(string $ip): string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) return preg_replace('/\.\d+$/', '.x', $ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) return implode(':', array_slice(explode(':', $ip), 0, 3)) . ':…';
+        return '';
     }
 
     /** Actions present in the workspace (for the filter). */

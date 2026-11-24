@@ -124,6 +124,10 @@ final class Scheduler
                 $out['emails'] = $mail['emails']; $out['mail_notices'] = $mail['notices']; $out['mail_errors'] = $mail['errors'];
             } catch (\Throwable $e) { $errors[] = 'Correo: ' . $e->getMessage(); }
             try { $out['gcal'] = GoogleExport::runAll(); } catch (\Throwable $e) { $errors[] = 'Google Calendar: ' . $e->getMessage(); }
+            if (class_exists(Automations::class)) {
+                try { $out['automations'] = Automations::runScheduled(); } catch (\Throwable $e) { $errors[] = 'Automatizaciones: ' . $e->getMessage(); }
+            }
+            try { self::dailyDigest(); } catch (\Throwable $e) { $errors[] = 'Registro maestro: ' . $e->getMessage(); }
         } catch (\Throwable $e) {
             $errors[] = $e->getMessage();
         } finally {
@@ -136,10 +140,49 @@ final class Scheduler
                 $db->run('UPDATE system_jobs SET last_finished_at = ?, last_ok_at = IF(? = 1, ?, last_ok_at), last_summary = ?, last_error = ?, cli_ok_at = IF(? = 1 AND ? = \'cli\', ?, cli_ok_at) WHERE name = ?', [
                     now(), $errors ? 0 : 1, now(), mb_substr($out['summary'], 0, 255), $errors ? mb_substr(implode(' · ', $errors), 0, 500) : null, $errors ? 0 : 1, $source, now(), self::JOB]);
             }
+            try { self::logRunErrors($errors, $source); } catch (\Throwable) {}
             flock($lock, LOCK_UN);
             fclose($lock);
         }
         return $out;
+    }
+
+    /**
+     * 1.15 · once a day, one Master Log entry per workspace with the previous day's notices: created,
+     * delivered to devices and failed. (Each failed delivery also has its own entry, with the reason.)
+     * A run that fails writes one entry an hour at most, so a broken setting is visible but not noisy.
+     */
+    private static function dailyDigest(): void
+    {
+        if (!Activity::v115()) return;
+        $db = Database::get();
+        $day = date('Y-m-d', strtotime(today() . ' -1 day'));
+        [$from, $to] = [$day . ' 00:00:00', $day . ' 23:59:59'];
+        foreach ($db->column("SELECT DISTINCT workspace_id FROM workspace_members WHERE status = 'active'") as $ws) {
+            $ws = (int)$ws;
+            $key = 'Avisos del ' . date('d/m/Y', strtotime($day));
+            if ($db->value("SELECT 1 FROM activity WHERE workspace_id = ? AND action = 'notify_daily' AND summary LIKE ? LIMIT 1", [$ws, $key . '%'])) continue;
+            $created = (int)$db->value('SELECT COUNT(*) FROM notifications WHERE workspace_id = ? AND created_at BETWEEN ? AND ?', [$ws, $from, $to]);
+            $d = $db->one("SELECT SUM(d.state = 'sent') AS sent, SUM(d.state = 'failed') AS failed FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
+                WHERE n.workspace_id = ? AND d.created_at BETWEEN ? AND ?", [$ws, $from, $to]) ?: [];
+            $sent = (int)($d['sent'] ?? 0);
+            $failed = (int)($d['failed'] ?? 0);
+            Activity::log('notify_daily', 'notification', null, "$key: $created creados, $sent entregados a dispositivos" . ($failed ? ", $failed sin entregar" : ''), null, null, [], $ws,
+                ['category' => 'notification', 'source' => 'system', 'user_id' => null, 'after' => ['creados' => $created, 'entregados' => $sent, 'sin entregar' => $failed]]);
+        }
+    }
+
+    /** 1.15 · a failed run, in each workspace's Master Log (once an hour for the same message). */
+    private static function logRunErrors(array $errors, string $source): void
+    {
+        if (!$errors || !Activity::v115()) return;
+        $db = Database::get();
+        $msg = mb_substr('La tarea programada terminó con errores: ' . implode(' · ', $errors), 0, 255);
+        $since = date('Y-m-d H:i:s', time() - 3600);
+        foreach ($db->column("SELECT DISTINCT workspace_id FROM workspace_members WHERE status = 'active'") as $ws) {
+            if ($db->value("SELECT 1 FROM activity WHERE workspace_id = ? AND action = 'notify_run_error' AND created_at >= ? LIMIT 1", [$ws, $since])) continue;
+            Activity::log('notify_run_error', 'system', null, $msg, null, null, [], (int)$ws, ['category' => 'error', 'result' => 'error', 'source' => 'system', 'user_id' => null, 'after' => ['origen' => $source]]);
+        }
     }
 
     public static function summary(array $o): string

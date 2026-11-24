@@ -70,6 +70,24 @@ final class Policy
         return self::workspace()['id'];
     }
 
+    /** 1.15 · the current workspace, or null when there is no session (error logging, sign-in). */
+    public static function wsIdOrNull(): ?int
+    {
+        if (self::$workspace !== null) return self::$workspace['id'];
+        if (!Auth::id()) return null;
+        try { return self::wsId(); } catch (\Throwable) { return null; }
+    }
+
+    /** 1.15 · the workspace a person mostly uses (for entries written before a session exists). */
+    public static function homeWorkspace(int $userId): ?int
+    {
+        $db = Database::get();
+        $last = (int)$db->value('SELECT last_workspace_id FROM users WHERE id = ?', [$userId]);
+        if ($last && $db->value("SELECT 1 FROM workspace_members WHERE user_id = ? AND workspace_id = ? AND status = 'active'", [$userId, $last])) return $last;
+        $id = $db->value("SELECT workspace_id FROM workspace_members WHERE user_id = ? AND status = 'active' ORDER BY joined_at LIMIT 1", [$userId]);
+        return $id ? (int)$id : null;
+    }
+
     public static function can(string $perm): bool
     {
         return in_array($perm, self::workspace()['perms'], true);

@@ -241,6 +241,14 @@ final class Push
         }
         Database::get()->run('UPDATE notification_deliveries SET state = ?, attempts = ?, last_code = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE notification_id = ? AND subscription_id = ?',
             [$state === 'ok' ? 'sent' : $state, $attempt, $l['code'] ?: null, $l['error'] ? mb_substr((string)$l['error'], 0, 255) : null, $next, now(), $notificationId, $subId]);
+        // 1.15: a message that will not be delivered goes to the Master Log, with the reason
+        if ($state === 'failed') {
+            try {
+                $n = Database::get()->one('SELECT n.workspace_id, n.user_id, n.project_id, n.task_id, u.name FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.id = ?', [$notificationId]);
+                if ($n) Activity::log('notify_failed', 'notification', $notificationId, 'No se pudo entregar un aviso al dispositivo de ' . $n['name'], $n['project_id'] ? (int)$n['project_id'] : null, $n['task_id'] ? (int)$n['task_id'] : null, [], (int)$n['workspace_id'],
+                    ['category' => 'notification', 'result' => 'error', 'source' => 'system', 'user_id' => null, 'after' => ['código' => $l['code'] ?: null, 'motivo' => $l['error'] ? mb_substr((string)$l['error'], 0, 200) : null, 'intentos' => $attempt]]);
+            } catch (\Throwable $e) { \Borealis\Core\ErrorHandler::log($e); }
+        }
     }
 
     /**
