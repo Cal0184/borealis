@@ -1650,7 +1650,7 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   await page.locator('#td-tracking select[name=reason]').selectOption('estimate');
   await page.locator('#td-tracking textarea[name=comment]').fill('El formulario necesitaba validaciones nuevas');
   await page.locator('#td-tracking input[name=corrective_action]').fill('Estimar con el equipo las tareas de formularios');
-  await page.locator('#td-tracking button[type=submit]').click();
+  await page.locator('#td-tracking form', { has: page.locator('select[name=reason]') }).locator('button[type=submit]').click(); // 1.14: the estimates box has its own form
   await page.locator('[data-explanations]').waitFor({ timeout: 5000 });
   check('El motivo queda registrado con autor y fecha', (await page.locator('[data-explanations]').innerText()).includes('Estimación insuficiente'));
   await page.locator('#td-tracking-sec').screenshot({ path: `${SHOTS}/40-ficha-seguimiento.png` });
