@@ -114,23 +114,12 @@ final class PlanningController
     public function timeline(Request $r): Response
     {
         $ctx = ProjectContext::load($r, 'timeline');
-        $pid = (int)$ctx['project']['id'];
-        $weeks = in_array((int)$r->q('weeks'), [4, 8, 12, 26], true) ? (int)$r->q('weeks') : 8;
+        // 1.14: Gantt chart built from the project's data (days, weeks or months)
+        $scale = isset(\Borealis\Services\Gantt::SCALES[(string)$r->q('scale')]) ? (string)$r->q('scale') : 'week';
         $from = (string)$r->q('from', '');
-        if (!Validator::isDate($from)) $from = date('Y-m-d', strtotime('monday this week', strtotime(today() . ' -7 days')));
-        $from = date('Y-m-d', strtotime('monday this week', strtotime($from)));
-        $to = date('Y-m-d', strtotime($from . " +$weeks weeks -1 day"));
-        $all = Tasks::query(['project_id' => $pid, 'sort' => 'due']);
-        $dated = $undated = [];
-        foreach ($all as $t) {
-            if (!$t['due_date'] && !$t['start_date']) { $undated[] = $t; continue; }
-            $s = $t['start_date'] ?: $t['due_date'];
-            $e = $t['due_date'] ?: $t['start_date'];
-            if ($e < $from || $s > $to) continue;
-            $dated[] = $t + ['bar_start' => max($s, $from), 'bar_end' => min($e, $to), 'clipped_start' => $s < $from, 'clipped_end' => $e > $to];
-        }
-        usort($dated, fn($a, $b) => strcmp($a['bar_start'], $b['bar_start']));
-        return View::page('planning/timeline', $ctx + ['tab' => 'timeline', 'from' => $from, 'to' => $to, 'weeks' => $weeks, 'dated' => $dated, 'undated' => $undated]);
+        $to = (string)$r->q('to', '');
+        $g = \Borealis\Services\Gantt::build($ctx['project'], $scale, Validator::isDate($from) ? $from : null, Validator::isDate($to) ? $to : null, (string)$r->q('subtasks', '1') !== '0');
+        return View::page('planning/timeline', $ctx + ['tab' => 'timeline', 'g' => $g, 'subtasks' => (string)$r->q('subtasks', '1') !== '0']);
     }
 
     public function epics(Request $r): Response

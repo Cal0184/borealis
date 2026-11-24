@@ -11,6 +11,13 @@ use Borealis\Services\Tasks;
 
 final class ProjectApi
 {
+    /** 1.14: the current dates become the Gantt's original plan. */
+    public function baseline(Request $r): Response
+    {
+        $n = \Borealis\Services\Gantt::rebaseline($r->intParam('id'), is_string($r->input('reason')) ? $r->input('reason') : null);
+        return Response::ok(['changed' => $n, 'redirect' => url('/projects/' . $r->intParam('id') . '/timeline')], $n ? "Planificación original actualizada ($n tareas)" : 'La planificación original ya coincidía con la actual');
+    }
+
     public function create(Request $r): Response
     {
         $id = Projects::create($r->input());

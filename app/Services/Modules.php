@@ -21,24 +21,28 @@ final class Modules
         'estimates' => ['Estimaciones', 'Puntos de esfuerzo por tarea', []],
         'epics' => ['Épicas', 'Agrupa tareas en objetivos mayores', []],
         'calendar' => ['Calendario', 'Fechas de vencimiento por mes y semana', []],
-        'timeline' => ['Cronograma', 'Barras de inicio a fin por tarea', []],
+        'timeline' => ['Carta Gantt', 'Tareas, hitos, dependencias, sprints y avance, generada sola con los datos del proyecto', []],
         'docs' => ['Documentación', 'Páginas y biblioteca de archivos del proyecto', []],
         'reports' => ['Reportes', 'Progreso, bloqueos y distribución del trabajo', []],
     ];
 
+    /** 1.14: on unless the project turned them off (the Gantt is built from data that already exists). */
+    public const DEFAULT_ON = ['timeline'];
+
     public static function enabled(int $projectId): array
     {
-        $rows = Database::get()->all('SELECT module_key FROM project_modules WHERE project_id = ? AND enabled = 1', [$projectId]);
-        $on = array_fill_keys(array_column($rows, 'module_key'), true);
+        $rows = Database::get()->all('SELECT module_key, enabled FROM project_modules WHERE project_id = ?', [$projectId]);
+        $set = array_column($rows, 'enabled', 'module_key');
         $out = [];
-        foreach (self::OPTIONAL as $k => $_) $out[$k] = isset($on[$k]);
+        foreach (self::OPTIONAL as $k => $_) $out[$k] = array_key_exists($k, $set) ? (bool)$set[$k] : in_array($k, self::DEFAULT_ON, true);
         return $out;
     }
 
     public static function isEnabled(int $projectId, string $key): bool
     {
         if (isset(self::CORE[$key])) return true;
-        return (bool)Database::get()->value('SELECT enabled FROM project_modules WHERE project_id = ? AND module_key = ?', [$projectId, $key]);
+        $v = Database::get()->value('SELECT enabled FROM project_modules WHERE project_id = ? AND module_key = ?', [$projectId, $key]);
+        return $v === null ? in_array($key, self::DEFAULT_ON, true) : (bool)$v;
     }
 
     public static function require(array $project, string $key): void

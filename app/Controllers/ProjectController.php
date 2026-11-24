@@ -21,7 +21,7 @@ final class ProjectController
     {
         $f = array_intersect_key($r->query, array_flip(['q', 'state', 'team_id', 'archived', 'sort', 'mine']));
         return View::page('projects/index', [
-            'title' => 'Proyectos', 'nav' => 'projects', 'projects' => Projects::list($f), 'filters' => $f,
+            'title' => 'Proyectos', 'nav' => 'projects', 'projects' => Projects::list($f + ['standard' => 1]), 'filters' => $f,
             'teams' => Teams::list(), 'canCreate' => Policy::can('projects.create'), 'people' => Workspaces::members(false),
         ]);
     }
