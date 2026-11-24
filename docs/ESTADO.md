@@ -17,6 +17,9 @@
 | Confirmaciones propias que no bloquean (sin `window.confirm`), protección de cambios conservada | ✅ | Navegador «1.15 · Confirmaciones…» |
 | El service worker no navega una ventana con cambios sin guardar | 🟡 | Código revisado; probarlo exige un push real del sistema operativo |
 | Notificaciones del sistema con el navegador cerrado | 🟡 | Depende del navegador y del sistema (INFORME-1.15 § 3); no se puede probar aquí |
+| Motor interno de avisos: recordatorios y avisos al teléfono sin cron, sin sesión y sin pestañas abiertas | ✅ | Prueba real con Nginx + PHP-FPM (`tests/fpm/engine.sh`, 12/12); la entrega final por Google, Apple o Mozilla no se puede probar aquí |
+| Perfil rediseñado (cabecera, índice de secciones, una columna) y menú de cuenta sin «Apariencia» duplicado | ✅ | Integración y navegador (las secciones y sus formularios siguen probándose); revisión visual con capturas 64, 65 y 69 |
+| Ficha de tarea rediseñada: panel más ancho, secciones compactas, actividad en pestañas que se recuerdan | ✅ | Navegador (horas, seguimiento y estimaciones se usan desde sus pestañas); capturas 66, 67 y 68 |
 | Registro maestro: accesos, intentos rechazados, resultado en la huella, tipos, agrupación, páginas por n.º, JSON y CSV | ✅ | Integración «1.15 · Registro maestro» y navegador |
 | Errores del servidor y avisos no entregados en el registro | 🟡 | El resumen diario y los fallos de entrega se escriben en la tarea programada; el error del servidor no se provoca en las pruebas |
 | Conservación con `bin/audit-archive.php` (la cadena sigue desde el último archivado) | ✅ | Integración: opciones, mínimo y continuación de la cadena; el archivado real de filas antiguas no se ejerce |

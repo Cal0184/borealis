@@ -1,6 +1,6 @@
 // 1.15 · Sidebar groups, compact sidebar, favorites and the quick search's «recent» list.
 // Preferences are saved to the person's profile (they follow them to other devices).
-import { api, appUrl, toast } from './core.js?v=1.15.0';
+import { api, appUrl, toast } from './core.js?v=1.15.1';
 
 let saveTimer = null;
 function savePrefs(body) {
@@ -74,4 +74,23 @@ if (input) {
   input.addEventListener('input', show);
   input.addEventListener('keydown', (e) => { if (e.key === 'Escape') box.hidden = true; });
   document.addEventListener('click', (e) => { if (!input.closest('form').contains(e.target)) box.hidden = true; });
+}
+
+// 1.15 · profile: the section index follows the scroll (and stays in view on the phone)
+const pnav = document.querySelector('[data-profile-nav]');
+if (pnav && 'IntersectionObserver' in window) {
+  const links = [...pnav.querySelectorAll('a[href^="#"]')];
+  const targets = links.map((a) => document.getElementById(a.hash.slice(1))).filter(Boolean);
+  const mark = (id) => links.forEach((a) => {
+    const on = a.hash === '#' + id;
+    if (on) { a.setAttribute('aria-current', 'true'); if (pnav.scrollWidth > pnav.clientWidth) pnav.scrollTo({ left: a.offsetLeft - 16, behavior: 'smooth' }); } else a.removeAttribute('aria-current');
+  });
+  const seen = new Map();
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => seen.set(en.target.id, en.isIntersecting ? en.intersectionRatio : 0));
+    const best = targets.find((t) => (seen.get(t.id) || 0) > 0);
+    if (best) mark(best.id);
+  }, { rootMargin: '-70px 0px -55% 0px', threshold: [0, 0.01] });
+  targets.forEach((t) => io.observe(t));
+  mark((location.hash || '#datos').slice(1));
 }

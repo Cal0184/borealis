@@ -150,7 +150,6 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
           <div class="menu" role="menu">
             <div class="menu-title"><?= e($s['user']['name']) ?></div>
             <a href="<?= e(url('/profile')) ?>" role="menuitem"><?= icon('user') ?> Mi perfil y preferencias</a>
-            <a href="<?= e(url('/profile')) ?>#apariencia" role="menuitem"><?= icon('eye') ?> Apariencia</a>
             <button type="button" role="menuitem" data-tour-start><?= icon('play') ?> Ver el tutorial</button>
             <a href="<?= e(url('/people/' . $s['user']['id'])) ?>" role="menuitem"><?= icon('eye') ?> Mi ficha de integrante</a>
             <hr>

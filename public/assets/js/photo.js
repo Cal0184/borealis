@@ -1,6 +1,6 @@
 // Profile photo (1.7): choose an image, frame it in a circle (drag, arrow keys, zoom) and upload a
 // 512 × 512 square. The server re-encodes it to small WebP sizes, so the original never leaves here.
-import { api, toast, openDialog, closeDialog, refresh } from './core.js?v=1.15.0';
+import { api, toast, openDialog, closeDialog, refresh } from './core.js?v=1.15.1';
 
 const OUT = 512;
 let st = null; // { img, zoom, x, y } x/y: centre of the crop, in image pixels

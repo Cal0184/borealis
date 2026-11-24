@@ -267,6 +267,7 @@ await attempt('Horas en el detalle de la tarea', async () => {
   await page.locator('.task-card', { hasText: 'Marcar el sendero' }).locator('.card-open').click();
   const drawer = page.locator('#drawer.open');
   await drawer.waitFor({ timeout: 5000 });
+  await drawer.locator('[data-td-tab="time"]').click(); // 1.15: hours live in the «Horas» tab of the activity
   await drawer.locator('#td-time', { hasText: '1 h 30 min' }).waitFor({ timeout: 5000 });
   check('El panel de la tarea muestra las horas del cierre', true);
   await drawer.locator('.time-form input[name=hours]').fill('45m');
@@ -1644,6 +1645,8 @@ await attempt('Monitoreo: resumen, cumplimiento, carga, tiempos, alertas e infor
   check('El informe se descarga en CSV', /\.csv$/.test(dl.suggestedFilename()), dl.suggestedFilename());
   await page.screenshot({ path: `${SHOTS}/40-monitoreo-informe.png`, fullPage: true });
   await page.goto(BASE + '/t/' + dev.key);
+  check('1.15: la pestaña «Seguimiento» marca que necesita atención', await page.locator('[data-td-tab="tracking"] .td-tab-dot').isVisible());
+  await page.locator('[data-td-tab="tracking"]').click(); // 1.15: tracking lives in its tab of the activity
   check('La ficha de la tarea tiene «Seguimiento» con la desviación de horas', await page.locator('[data-deviation] .dev-over').isVisible());
   const why = page.locator('#td-tracking details', { has: page.locator('select[name=reason]') }); // 1.14: the estimates box has its own form
   check('Con una desviación importante el formulario del motivo aparece abierto (opcional)', await why.evaluate((d) => d.open));
@@ -1845,6 +1848,7 @@ await attempt('1.14 · Nuevo proyecto con responsable, fechas e integrantes', as
 await attempt('1.14 · Estimación del trabajador en la ficha', async () => {
   if (!estKey) { check('Hay una tarea con estimación para probar', false); return; }
   await page.goto(BASE + '/t/' + estKey);
+  await page.locator('[data-td-tab="time"]').click(); // 1.15: estimates live with the hours, in the «Horas» tab
   const box = page.locator('[data-estimates]');
   check('La ficha muestra administración, trabajador, acordado y real', await box.isVisible() && await box.locator('[data-est-agreed]').isVisible() && await box.locator('[data-est-real]').isVisible());
   const form = box.locator('[data-estimate-form]');

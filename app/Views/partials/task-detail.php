@@ -145,7 +145,7 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
             <label class="drop-zone" data-drop-zone>
               <input type="file" name="file[]" multiple data-autosubmit>
               <?= icon('upload') ?> Arrastra archivos aquí o <strong>elige desde tu equipo</strong>
-              <span class="small" style="display:block">Máximo <?= round((int)config('uploads.max_bytes', 10485760) / 1048576) ?> MB por archivo</span>
+              <span class="small drop-limit">· máximo <?= round((int)config('uploads.max_bytes', 10485760) / 1048576) ?> MB por archivo</span>
             </label>
             <div class="form-error mt" data-form-error></div>
           </form>
@@ -177,7 +177,25 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         </div>
       </section>
 
-      <section class="task-section">
+      <?php
+        $mon = \Borealis\Services\Monitoring::class;
+        $monCls = $mon::classify($t);
+        $monDev = $mon::deviation($t['estimate_hours'] !== null ? (float)$t['estimate_hours'] : null, (int)$time['total']);
+        $monDue = $mon::dueChanges($tid);
+        $monWhy = $mon::explanations($tid);
+        $monCfg = $mon::settings();
+        $monNeeds = $monCls === 'late' || $monCls === 'done_late' || ($monDev && $monDev['pct'] >= $monCfg['deviation_pct']);
+      ?>
+
+      <?php // 1.15 · activity in tabs: comments first; hours, tracking and history one click away ?>
+      <div class="td-activity" data-td-tabs>
+        <div class="td-tabs" role="tablist" aria-label="Actividad de la tarea">
+          <button type="button" role="tab" id="td-tab-comments-<?= $tid ?>" aria-controls="td-pane-comments-<?= $tid ?>" aria-selected="true" data-td-tab="comments"><?= icon('message', 'sm') ?> Comentarios</button>
+          <button type="button" role="tab" id="td-tab-time-<?= $tid ?>" aria-controls="td-pane-time-<?= $tid ?>" aria-selected="false" tabindex="-1" data-td-tab="time"><?= icon('clock', 'sm') ?> Horas<?php if (($t['estimate_review'] ?? '') === 'pending'): ?> <span class="td-tab-dot" title="Estimación por revisar"></span><?php endif; ?></button>
+          <button type="button" role="tab" id="td-tab-tracking-<?= $tid ?>" aria-controls="td-tracking-sec" aria-selected="false" tabindex="-1" data-td-tab="tracking"><?= icon('target', 'sm') ?> Seguimiento<?php if ($monNeeds): ?> <span class="td-tab-dot" title="Necesita atención"></span><?php endif; ?></button>
+          <button type="button" role="tab" id="td-tab-history-<?= $tid ?>" aria-controls="td-pane-history-<?= $tid ?>" aria-selected="false" tabindex="-1" data-td-tab="history"><?= icon('clock', 'sm') ?> Historial</button>
+        </div>
+      <section class="task-section td-pane" role="tabpanel" id="td-pane-comments-<?= $tid ?>" aria-labelledby="td-tab-comments-<?= $tid ?>" data-td-pane="comments">
         <div id="td-comments" data-region>
           <h3><?= icon('message') ?> Comentarios <span class="count"><?= count($comments) ?></span></h3>
           <?php foreach ($comments as $c): $mine = (int)$c['user_id'] === Auth::id(); ?>
@@ -220,11 +238,12 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         <?php endif; ?>
       </section>
 
-      <section class="task-section">
+      <section class="task-section td-pane" role="tabpanel" id="td-pane-time-<?= $tid ?>" aria-labelledby="td-tab-time-<?= $tid ?>" data-td-pane="time" hidden>
         <div id="td-time" data-region>
           <?php $tm = $time; $est = $t['estimate_hours'] !== null ? (float)$t['estimate_hours'] * 60 : null; ?>
           <h3><?= icon('clock') ?> Horas <span class="count"><?= e(\Borealis\Services\TimeEntries::fmt((int)$tm['total'])) ?><?= $est ? ' de ' . e(\Borealis\Services\TimeEntries::fmt((int)$est)) . ' estimadas' : '' ?></span></h3>
           <?php if ($est): ?><div class="progress mb<?= $tm['total'] > $est ? ' over' : '' ?>"><span style="--p:<?= min(100, pct((int)$tm['total'], (int)$est)) ?>%"></span></div><?php endif; ?>
+          <?= partial('task-estimates', ['t' => $t + ['archived_project' => !empty($t['project']['archived_at'])], 'logged' => (int)$time['total']]) ?>
           <?php if ($tm['people']): ?>
             <div class="time-people">
               <?php foreach ($tm['people'] as $pp): ?><span class="time-chip"><?= avatar(['id' => $pp['id'] ?? null, 'name' => $pp['name'], 'avatar_color' => $pp['avatar_color']], 'sm') ?> <?= e($pp['name']) ?> <strong><?= e(\Borealis\Services\TimeEntries::fmt((int)$pp['minutes'])) ?></strong></span><?php endforeach; ?>
@@ -260,16 +279,7 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         <?php endif; ?>
       </section>
 
-      <?php
-        $mon = \Borealis\Services\Monitoring::class;
-        $monCls = $mon::classify($t);
-        $monDev = $mon::deviation($t['estimate_hours'] !== null ? (float)$t['estimate_hours'] : null, (int)$time['total']);
-        $monDue = $mon::dueChanges($tid);
-        $monWhy = $mon::explanations($tid);
-        $monCfg = $mon::settings();
-        $monNeeds = $monCls === 'late' || $monCls === 'done_late' || ($monDev && $monDev['pct'] >= $monCfg['deviation_pct']);
-      ?>
-      <section class="task-section" id="td-tracking-sec">
+      <section class="task-section td-pane" role="tabpanel" id="td-tracking-sec" aria-labelledby="td-tab-tracking-<?= $tid ?>" data-td-pane="tracking" hidden>
         <div id="td-tracking" data-region>
           <h3><?= icon('target') ?> Seguimiento <span class="badge <?= in_array($monCls, ['late', 'done_late'], true) ? 'danger' : ($monCls === 'soon' ? 'warn' : ($monCls === 'nodate' ? '' : 'success')) ?>" data-punctuality="<?= e($monCls) ?>"><?= e($mon::CLASSES[$monCls]) ?></span></h3>
           <div class="tracking-box">
@@ -279,7 +289,6 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
               <dt>Horas</dt><dd data-deviation><?php if ($monDev): ?><?= e($mon::fmtHours($monDev['estimate'])) ?> estimadas · <?= e($mon::fmtHours($monDev['logged'])) ?> registradas · <span class="<?= $monDev['pct'] >= $monCfg['deviation_pct'] ? 'dev-over' : ($monDev['pct'] < 0 ? 'dev-under' : '') ?>"><?= e($mon::fmtHours($monDev['hours'], true)) ?> (<?= $monDev['pct'] > 0 ? '+' : '' ?><?= (int)$monDev['pct'] ?> %)</span><?php elseif ((int)$time['total']): ?>Sin estimación: no se puede comparar<?php else: ?><span class="muted">Sin estimación ni registros</span><?php endif; ?></dd>
               <?php if (!$done): ?><dt><label for="td-rh-<?= $tid ?>">Horas restantes</label></dt><dd class="ts-inline"><input class="input sm ts-num" type="number" min="0" step="0.5" id="td-rh-<?= $tid ?>" name="remaining_hours" value="<?= $t['remaining_hours'] !== null ? e(rtrim(rtrim((string)$t['remaining_hours'], '0'), '.')) : '' ?>" placeholder="auto" title="Opcional: si lo dejas vacío se usa estimado menos registrado" data-patch="<?= e($patch) ?>"<?= $dis ?>><span class="muted small">h · opcional, mejora la carga planificada</span></dd><?php endif; ?>
             </dl>
-            <?= partial('task-estimates', ['t' => $t + ['archived_project' => !empty($t['project']['archived_at'])], 'logged' => (int)$time['total']]) ?>
             <?php if ($monDue): ?>
               <details class="small" data-due-history><summary>La fecha límite cambió <?= count($monDue) ?> <?= count($monDue) === 1 ? 'vez' : 'veces' ?></summary>
                 <ul class="list"><?php foreach ($monDue as $d): ?><li class="small"><span style="flex:1"><?= $d['old_due'] ? e(fmt_date($d['old_due'], true)) : 'sin fecha' ?> → <?= $d['new_due'] ? e(fmt_date($d['new_due'], true)) : 'sin fecha' ?></span><span class="muted"><?= e($d['user_name'] ?? 'Sistema') ?> · <?= e(fmt_datetime($d['changed_at'])) ?></span></li><?php endforeach; ?></ul>
@@ -309,7 +318,7 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
         </div>
       </section>
 
-      <section class="task-section">
+      <section class="task-section td-pane" role="tabpanel" id="td-pane-history-<?= $tid ?>" aria-labelledby="td-tab-history-<?= $tid ?>" data-td-pane="history" hidden>
         <div id="td-history" data-region>
           <h3><?= icon('clock') ?> Historial<?php if (\Borealis\Security\Policy::can('audit.view')): ?> <a class="small muted" href="<?= e(url('/admin/audit', ['task_id' => $tid])) ?>">Ver con antes y después</a><?php endif; ?></h3>
           <ul class="history">
@@ -319,6 +328,7 @@ $taskLabelIds = array_map('intval', array_column($t['labels'], 'id'));
           </ul>
         </div>
       </section>
+      </div>
     </div>
 
     <aside class="task-side ts" id="td-side" data-region aria-label="Propiedades de la tarea">

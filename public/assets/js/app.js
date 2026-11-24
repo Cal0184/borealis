@@ -1,24 +1,24 @@
 // Entry point for the authenticated application.
-import { runInit } from './core.js?v=1.15.0';
-import './email-check.js?v=1.15.0';
-import './date-field.js?v=1.15.0';
-import './ui.js?v=1.15.0';
-import './sortable.js?v=1.15.0';
-import './people-drag.js?v=1.15.0';
-import './calendar.js?v=1.15.0';
-import './calendar-page.js?v=1.15.0';
-import './mentions.js?v=1.15.0';
-import './colors.js?v=1.15.0';
-import './ambient.js?v=1.15.0';
-import './tour.js?v=1.15.0';
-import './photo.js?v=1.15.0';
-import './push.js?v=1.15.0';
-import './analysis.js?v=1.15.0';
-import './workload.js?v=1.15.0';
-import './gantt.js?v=1.15.0';
-import './notify-live.js?v=1.15.0';
-import './nav.js?v=1.15.0';
-import { openFromUrl } from './drawer.js?v=1.15.0';
+import { runInit } from './core.js?v=1.15.1';
+import './email-check.js?v=1.15.1';
+import './date-field.js?v=1.15.1';
+import './ui.js?v=1.15.1';
+import './sortable.js?v=1.15.1';
+import './people-drag.js?v=1.15.1';
+import './calendar.js?v=1.15.1';
+import './calendar-page.js?v=1.15.1';
+import './mentions.js?v=1.15.1';
+import './colors.js?v=1.15.1';
+import './ambient.js?v=1.15.1';
+import './tour.js?v=1.15.1';
+import './photo.js?v=1.15.1';
+import './push.js?v=1.15.1';
+import './analysis.js?v=1.15.1';
+import './workload.js?v=1.15.1';
+import './gantt.js?v=1.15.1';
+import './notify-live.js?v=1.15.1';
+import './nav.js?v=1.15.1';
+import { openFromUrl } from './drawer.js?v=1.15.1';
 
 // The greeting follows the person's own clock (the server only knows the installation's time zone).
 function greet() {

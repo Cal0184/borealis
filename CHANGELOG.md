@@ -1,5 +1,32 @@
 # Cambios
 
+## 1.15.1 (24/11/2026)
+
+Se entrega junto con la 1.15.0, en el mismo PR. No tiene migraciones nuevas.
+
+**Avisos sin cron y con Borealis cerrado: motor interno.** Sin una tarea programada en el servidor, los recordatorios solo se creaban mientras alguien tenía Borealis abierto. Ahora Borealis mantiene su propio motor (`app/Services/Heartbeat.php`):
+- **Arranque:** arranca con cualquier visita, incluso anónima.
+- **Funcionamiento:** cada 60 s se llama a sí mismo en `POST /cron/tick`, protegido con la clave de `/cron/run`, y ejecuta la tarea programada. Funciona sin sesión iniciada y sin pestañas abiertas.
+- **Seguridad:** hay una sola cadena de latidos a la vez, y el motor se detiene solo cuando hay un cron real.
+- **Estado:** visible en Administración › Notificaciones.
+- **Prueba real:** con Nginx + PHP-FPM (`tests/fpm/engine.sh`). Requisitos y límites en `docs/CONFIGURACION-1.15.md`.
+
+**Perfil (rediseño).**
+- **Cabecera:** foto, nombre, cargo, rol, correo, mención y horas semanales.
+- **Índice de secciones:** a la izquierda en escritorio y fijo arriba en el móvil. Sigue el desplazamiento y lleva a Datos personales, Apariencia, Notificaciones, Conexiones, Seguridad y Ayuda.
+- **Una sola columna** de ancho cómodo.
+- **Datos personales:** formulario en dos columnas y colores de iniciales como muestras.
+- **Apariencia:** incluye ahora las animaciones, que antes estaban en una tarjeta suelta, «Preferencias».
+- **Notificaciones:** las categorías se ven en cuadrícula, cada una marcada al estar activa.
+- **Menú de la cuenta:** arriba a la derecha ya no repite «Apariencia», porque llevaba a la misma página que «Mi perfil».
+
+**Ficha de la tarea (rediseño).**
+- **Panel lateral:** más ancho en pantallas grandes (hasta 1080 px) y título más grande.
+- **Secciones:** subtareas, relaciones, archivos y enlaces quedan en un solo bloque con separadores. El área de archivos ocupa una línea y los dos enlaces de trabajo van lado a lado.
+- **Descripción vacía:** se ve como una caja discreta, no como un hueco grande.
+- **Actividad en pestañas:** Comentarios, Horas (con las estimaciones), Seguimiento e Historial. Un punto rojo avisa cuando el seguimiento necesita atención o hay una estimación por revisar. La pestaña elegida se mantiene al guardar y al abrir otra tarea.
+- **Propiedades:** la fecha y la hora de entrega quedan en la misma línea, y «Sugerencia según el historial» se alinea con los valores.
+
 ## 1.15.0 (24/11/2026)
 
 **Refinamiento funcional, auditoría social y experiencia de uso.** El detalle, la investigación de Atlassian y la evaluación heurística están en `docs/INFORME-1.15.md`. La configuración está en `docs/CONFIGURACION-1.15.md`: no hace falta nada nuevo, solo la migración 017.

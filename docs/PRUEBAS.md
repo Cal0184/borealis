@@ -1,15 +1,24 @@
-# Resultados de pruebas — Borealis 1.15.0
+# Resultados de pruebas — Borealis 1.15.1
 
 Resultados **reales**, generados por las propias pruebas el 24/11/2026, instalando desde el ZIP. Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 1116 | 0 | 1116 |
-| Navegador Chromium (`tests/e2e/run.mjs`) | 330 | 0 | 330 |
+| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 1122 | 0 | 1122 |
+| Navegador Chromium (`tests/e2e/run.mjs`) | 331 | 0 | 331 |
+| Motor interno de avisos con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 12 | 0 | 12 |
 
 **Entorno:** PHP 8.3.6 (servidor integrado de PHP), MariaDB 10.11, Chromium (Playwright), Linux. Cada ejecución parte de una base de datos vacía e instala Borealis desde el instalador web.
 
 **No probado todavía:** Apache con `mod_rewrite` y Nginx reales (solo el servidor integrado de PHP), MySQL 8, Safari y Firefox, lectores de pantalla, hospedaje compartido real, rendimiento con miles de tareas. **Servicios externos reales:** la entrega de avisos a un teléfono real (FCM/Mozilla/Apple), un canal de Discord real, la API real de GitHub, Google Calendar con un cliente OAuth real y un servidor de correo real. Todos se probaron contra servidores locales que imitan sus respuestas (`tests/fake-services/server.php`, `tests/fake-services/smtp.php`, `tests/fake-google/server.php`): eso prueba lo que envía Borealis (incluido el cifrado y la firma de cada aviso, que la prueba descifra y verifica), no que esos servicios lo acepten.
+
+**Novedades 1.15.1:**
+- **Motor interno de avisos.** Se probó de verdad con Nginx + PHP-FPM, como en HestiaCP, mediante `tests/fpm/engine.sh`: 12 de 12 comprobaciones correctas. No había cron, nadie inició sesión ni tenía una pestaña abierta, y la única visita fue anónima.
+  - Llegó al teléfono de prueba el aviso de una tarea escrita directamente en la base, cifrado y descifrable, sin repetirse.
+  - Hubo una sola cadena de latidos, y el motor se detuvo al aparecer un cron real.
+  - En integración: la dirección `/cron/tick` está cerrada sin clave, con GET o sin una cadena válida, no hace nada sin PHP-FPM, y Administración muestra el estado del motor.
+- **Perfil y ficha de tarea rediseñados.** Las pruebas del navegador que usan horas, seguimiento y estimaciones abren ahora su pestaña, y cada ajuste lleva un comentario en `run.mjs`. Hay una comprobación nueva: el punto rojo de «Seguimiento».
+- **Fallo encontrado por las pruebas y corregido:** al guardar un motivo de retraso, la página volvía a la pestaña Comentarios. Ahora la pestaña elegida se mantiene.
 
 **Novedades 1.15:** grupos «1.15 · …» en integración (`tests/integration/v115.php`, 68 comprobaciones) y en el navegador («Novedades 1.15», 29, incluidas las pantallas sin desplazamiento horizontal en cuatro tamaños).
 - **Avisos con la página abierta:** estado de la campana, avisos nuevos desde «after», 401 sin redirigir, ningún `window.confirm`, la consulta en segundo plano no alarga la sesión. En el navegador: cerrar un formulario con cambios pregunta dentro de Borealis, la página sigue funcionando con la pregunta abierta y no aparece ningún diálogo del navegador.
@@ -733,7 +742,7 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ Enlace: Invitación: la carpeta aparece una sola vez
 - ✅ Enlace: Enlace copiado de una tarea: la carpeta aparece una sola vez
 - ✅ Enlace: Dirección de regreso de Google: la carpeta aparece una sola vez
-- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.15.0)
+- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.15.1)
 - ✅ El mensaje de cuenta creada trae el enlace exacto de inicio de sesión
 - ✅ Ese enlace abre la página de inicio de sesión
 - ✅ Con los datos del mensaje se entra a Borealis
@@ -1399,7 +1408,7 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 
 - ✅ Migración 017: seis tablas nuevas y cuatro columnas
 - ✅ La migración 017 se puede repetir sin errores
-- ✅ Versión 1.15.0
+- ✅ Versión 1.15.1
 
 ### 1.15 · Avisos con la página abierta
 
@@ -1486,6 +1495,15 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ Al actualizar se aplica la 017 y no se pierde nada del registro
 - ✅ …y la integridad sigue comprobándose bien
 - ✅ Si se borran registros antiguos sin archivarlos se detecta; archivados (con el punto de partida), la cadena sigue válida
+
+### 1.15 · Motor interno de avisos
+
+- ✅ /cron/tick sin la clave se rechaza (403) y no dice nada de la instalación
+- ✅ /cron/tick por GET no hace nada (405)
+- ✅ Con la clave pero sin una cadena válida no hace nada (409)
+- ✅ Sin PHP-FPM (php -S) el motor queda apagado: la tarea programada sigue disponible
+- ✅ Administración › Notificaciones muestra el estado del motor interno (aquí: no disponible sin PHP-FPM, o en reposo porque el cron de las pruebas ya corrió)
+- ✅ El motor no se activa en la página de inicio de sesión sin PHP-FPM ni deja archivos
 
 ## Navegador (Chromium)
 
@@ -1792,6 +1810,7 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ Riesgos y alertas explica cada alerta y permite marcarla como revisada
 - ✅ Marcar una alerta como revisada la deja con quién la revisó
 - ✅ El informe se descarga en CSV
+- ✅ 1.15: la pestaña «Seguimiento» marca que necesita atención
 - ✅ La ficha de la tarea tiene «Seguimiento» con la desviación de horas
 - ✅ Con una desviación importante el formulario del motivo aparece abierto (opcional)
 - ✅ El motivo queda registrado con autor y fecha
@@ -1887,6 +1906,23 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 ### Errores de JavaScript
 
 - ✅ Sin errores de JavaScript en la consola durante todo el recorrido
+
+## Motor interno de avisos (Nginx + PHP-FPM real, `tests/fpm/engine.sh`)
+
+Intervalo de prueba: 15 s. Sin cron, sin sesión iniciada y sin pestañas abiertas; la única petición de una persona es una visita anónima a la página de inicio de sesión.
+
+- ✅ POST /cron/tick sin clave se rechaza (403)
+- ✅ GET /cron/tick no hace nada (405)
+- ✅ La visita a la página de inicio de sesión arranca el motor
+- ✅ Sin cron, sin sesión y sin pestañas abiertas, el aviso llega al teléfono (en 15 s)
+- ✅ El recordatorio de la tarea se creó en la campana
+- ✅ El teléfono descifra el aviso y nombra la tarea
+- ✅ La ejecución quedó registrada como «motor interno»
+- ✅ Entre tanto ninguna persona hizo otra petición (solo la visita inicial)
+- ✅ El motor late de forma continua (≥ 2 latidos)
+- ✅ El mismo aviso no se envía dos veces
+- ✅ Una sola cadena (no se multiplican los latidos)
+- ✅ Al detectar el cron, el motor se detiene («cron»)
 
 ## Capturas
 

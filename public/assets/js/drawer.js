@@ -1,5 +1,5 @@
 // Task detail drawer: opens a task over the current view without losing filters or scroll.
-import { appUrl, isDirty, runInit, toast, refresh, confirmAction } from './core.js?v=1.15.0';
+import { appUrl, isDirty, runInit, onInit, toast, refresh, confirmAction } from './core.js?v=1.15.1';
 
 const drawer = () => document.getElementById('drawer');
 let lastOpener = null;
@@ -38,6 +38,7 @@ export async function openTask(key, opener = null) {
     d.dataset.src = src;
     setParam(key);
     runInit(body);
+    applySavedTab(body);
     body.querySelector('.title-input, [data-drawer-close]')?.focus({ preventScroll: true });
   } catch (err) {
     closeDrawer(true);
@@ -90,3 +91,42 @@ export function openFromUrl() {
   const key = new URL(location.href).searchParams.get('task');
   if (key && /^[A-Z0-9]{1,12}-\d+$/i.test(key)) openTask(key);
 }
+
+// 1.15 · task activity tabs (Comentarios · Horas · Seguimiento · Historial), drawer and full page
+function selectTab(tab, focus = false) {
+  const box = tab.closest('[data-td-tabs]');
+  if (!box) return;
+  box.querySelectorAll('[data-td-tab]').forEach((t) => {
+    const on = t === tab;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.tabIndex = on ? 0 : -1;
+  });
+  box.querySelectorAll('[data-td-pane]').forEach((p) => { p.hidden = p.dataset.tdPane !== tab.dataset.tdTab; });
+  if (focus) tab.focus();
+}
+// the last tab chosen stays chosen for the next task (whoever logs hours keeps «Horas» at hand)
+let currentTab = null;
+function rememberTab(name) { currentTab = name; try { sessionStorage.setItem('borealis.tdTab', name); } catch { /* private mode */ } }
+export function applySavedTab(root = document) {
+  let name = currentTab;
+  if (!name) try { name = sessionStorage.getItem('borealis.tdTab'); } catch { /* private mode */ }
+  const tab = name && root.querySelector(`[data-td-tabs] [data-td-tab="${name}"]`);
+  if (tab) selectTab(tab);
+}
+document.addEventListener('click', (e) => {
+  const tab = e.target instanceof Element ? e.target.closest('[data-td-tab]') : null;
+  if (tab) { selectTab(tab); rememberTab(tab.dataset.tdTab); }
+});
+document.addEventListener('keydown', (e) => {
+  const tab = e.target instanceof Element ? e.target.closest('[data-td-tab]') : null;
+  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const all = [...tab.parentElement.querySelectorAll('[data-td-tab]')];
+  const i = all.indexOf(tab);
+  const next = e.key === 'Home' ? all[0] : e.key === 'End' ? all[all.length - 1] : all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
+  e.preventDefault();
+  selectTab(next, true);
+  rememberTab(next.dataset.tdTab);
+});
+applySavedTab();
+// a refresh after saving re-renders the task: keep the tab the person was using
+onInit((root) => { if (root.querySelector?.('[data-td-tabs]')) applySavedTab(root); });
