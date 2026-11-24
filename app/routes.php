@@ -1,0 +1,237 @@
+<?php
+declare(strict_types=1);
+
+use Borealis\Api;
+use Borealis\Controllers as C;
+use Borealis\Core\Router;
+
+$r = new Router();
+
+// ---- Authentication (public) ----------------------------------------------
+$r->get('/login', [C\AuthController::class, 'loginForm'], ['public' => true]);
+$r->post('/login', [C\AuthController::class, 'login'], ['public' => true]);
+$r->post('/logout', [C\AuthController::class, 'logout'], ['public' => true]);
+$r->get('/register', [C\AuthController::class, 'registerForm'], ['public' => true]);
+$r->post('/register', [C\AuthController::class, 'register'], ['public' => true]);
+$r->get('/invite/{token}', [C\AuthController::class, 'inviteForm'], ['public' => true]);
+$r->post('/invite/{token}', [C\AuthController::class, 'acceptInvite'], ['public' => true]);
+
+// ---- Pages -----------------------------------------------------------------
+$r->get('/', [C\HomeController::class, 'home']);
+$r->get('/my-work', [C\HomeController::class, 'myWork']);
+$r->get('/search', [C\HomeController::class, 'search']);
+$r->get('/notifications', [C\HomeController::class, 'notifications']);
+$r->get('/notifications/menu', [C\HomeController::class, 'notificationsMenu']);
+$r->get('/notifications/{id}/open', [C\HomeController::class, 'openNotification']);
+$r->get('/calendar', [C\CalendarController::class, 'calendar']);
+$r->get('/tasks', [C\CalendarController::class, 'tasks']);
+$r->get('/sprints', [C\ToolsController::class, 'sprints']);
+$r->get('/integrations', [C\ToolsController::class, 'integrations']);
+$r->get('/google/connect', [C\CalendarController::class, 'googleConnect']);
+$r->get('/google/callback', [C\CalendarController::class, 'googleCallback']);
+$r->get('/monitoring', [C\MonitoringController::class, 'index']);
+$r->get('/monitoring/report.csv', [C\MonitoringController::class, 'reportCsv']);
+$r->get('/analysis', [C\AnalysisController::class, 'index']);
+$r->get('/analysis/report/print', [C\AnalysisController::class, 'printReport']);
+$r->get('/analysis/report.csv', [C\AnalysisController::class, 'reportCsv']);
+$r->get('/reports', [C\PlanningController::class, 'workspaceReports']);
+$r->get('/reports/print', [C\PlanningController::class, 'printWorkspace']);
+$r->get('/reports/{kind}.csv', [C\PlanningController::class, 'exportWorkspace']);
+$r->get('/profile', [C\HomeController::class, 'profile']);
+
+$r->get('/teams', [C\TeamController::class, 'index']);
+$r->get('/teams/{id}', [C\TeamController::class, 'show']);
+$r->get('/people/{id}', [C\TeamController::class, 'person']);
+$r->get('/capacity', [C\TeamController::class, 'capacity']);
+
+$r->get('/projects', [C\ProjectController::class, 'index']);
+$r->get('/projects/{id}', [C\ProjectController::class, 'summary']);
+$r->get('/projects/{id}/list', [C\ProjectController::class, 'list']);
+$r->get('/projects/{id}/board', [C\ProjectController::class, 'board']);
+$r->get('/projects/{id}/backlog', [C\PlanningController::class, 'backlog']);
+$r->get('/projects/{id}/sprints', [C\PlanningController::class, 'sprints']);
+$r->get('/projects/{id}/calendar', [C\PlanningController::class, 'projectCalendar']);
+$r->get('/projects/{id}/timeline', [C\PlanningController::class, 'timeline']);
+$r->get('/projects/{id}/epics', [C\PlanningController::class, 'epics']);
+$r->get('/projects/{id}/docs', [C\DocsController::class, 'index']);
+$r->get('/projects/{id}/docs/{doc}', [C\DocsController::class, 'show']);
+$r->get('/projects/{id}/files', [C\DocsController::class, 'files']);
+$r->get('/projects/{id}/reports', [C\PlanningController::class, 'projectReports']);
+$r->get('/projects/{id}/settings', [C\ProjectController::class, 'settings']);
+$r->get('/projects/{id}/export.csv', [C\PlanningController::class, 'exportCsv']);
+$r->get('/projects/{id}/hours.csv', [C\PlanningController::class, 'exportHours']);
+$r->get('/projects/{id}/export.json', [C\PlanningController::class, 'exportProject']);
+$r->get('/projects/{id}/report/print', [C\PlanningController::class, 'printProject']);
+$r->get('/t/{key}', [C\TaskController::class, 'show']);
+$r->get('/files/{id}', [C\DocsController::class, 'download']);
+$r->get('/avatars/{id}/{token}/{size}', [C\HomeController::class, 'avatar']);
+
+$r->get('/admin', [C\AdminController::class, 'settings']);
+$r->get('/admin/members', [C\AdminController::class, 'members']);
+$r->get('/admin/roles', [C\AdminController::class, 'roles']);
+$r->get('/admin/audit', [C\AdminController::class, 'audit']);
+$r->get('/admin/data', [C\AdminController::class, 'data']);
+$r->get('/admin/export.json', [C\AdminController::class, 'exportJson']);
+$r->get('/admin/backups/{name}', [C\AdminController::class, 'downloadBackup']);
+
+// ---- JSON API ----------------------------------------------------------------
+$r->post('/api/workspace/switch', [Api\WorkspaceApi::class, 'switch']);
+$r->post('/api/workspaces', [Api\WorkspaceApi::class, 'create']);
+$r->post('/api/capacity-alerts/{id}/resolve', [Api\TeamApi::class, 'resolveCapacityAlert']);
+$r->patch('/api/workspace', [Api\WorkspaceApi::class, 'update']);
+$r->post('/api/members', [Api\WorkspaceApi::class, 'createUser']);
+$r->post('/api/ghosts', [Api\GhostApi::class, 'create']);
+$r->post('/api/ghosts/delete-all', [Api\GhostApi::class, 'deleteAll']);
+$r->post('/api/ghosts/leave', [Api\GhostApi::class, 'leave']);
+$r->post('/api/ghosts/{id}/enter', [Api\GhostApi::class, 'enter']);
+$r->patch('/api/members/{id}', [Api\WorkspaceApi::class, 'updateMember']);
+$r->post('/api/members/{id}/password', [Api\WorkspaceApi::class, 'resetPassword']);
+$r->post('/api/invitations', [Api\WorkspaceApi::class, 'invite']);
+$r->delete('/api/invitations/{id}', [Api\WorkspaceApi::class, 'revokeInvite']);
+$r->post('/api/invitations/{id}/renew', [Api\WorkspaceApi::class, 'renewInvite']);
+$r->post('/api/roles', [Api\WorkspaceApi::class, 'saveRole']);
+$r->patch('/api/roles/{id}', [Api\WorkspaceApi::class, 'saveRole']);
+$r->delete('/api/roles/{id}', [Api\WorkspaceApi::class, 'deleteRole']);
+$r->post('/api/priorities', [Api\WorkspaceApi::class, 'savePriority']);
+$r->patch('/api/priorities/{id}', [Api\WorkspaceApi::class, 'savePriority']);
+$r->delete('/api/priorities/{id}', [Api\WorkspaceApi::class, 'deletePriority']);
+$r->post('/api/backups', [Api\WorkspaceApi::class, 'backup']);
+$r->post('/api/migrations', [Api\WorkspaceApi::class, 'migrate']);
+$r->post('/api/import/legacy', [Api\WorkspaceApi::class, 'importLegacy']);
+$r->patch('/api/profile', [Api\WorkspaceApi::class, 'profile']);
+$r->post('/api/profile/photo', [Api\WorkspaceApi::class, 'photo']);
+$r->delete('/api/profile/photo', [Api\WorkspaceApi::class, 'removePhoto']);
+$r->post('/api/profile/password', [Api\WorkspaceApi::class, 'password']);
+$r->patch('/api/profile/prefs', [Api\WorkspaceApi::class, 'prefs']);
+$r->post('/api/notifications/read-all', [Api\WorkspaceApi::class, 'readAll']);
+$r->post('/api/notifications/{id}/read', [Api\WorkspaceApi::class, 'read']);
+
+// 1.8: notification preferences, mobile notifications, project tools and integrations
+$r->patch('/api/profile/notifications', [Api\ToolsApi::class, 'savePrefs']);
+$r->get('/api/push/key', [Api\ToolsApi::class, 'pushKey']);
+$r->post('/api/push/subscription', [Api\ToolsApi::class, 'subscribe']);
+$r->post('/api/push/unsubscribe', [Api\ToolsApi::class, 'unsubscribe']);
+$r->post('/api/push/test', [Api\ToolsApi::class, 'test']);
+$r->get('/api/push/pending', [Api\ToolsApi::class, 'pending']);
+$r->post('/api/projects/{id}/links', [Api\ToolsApi::class, 'addLink']);
+$r->delete('/api/links/{id}', [Api\ToolsApi::class, 'removeLink']);
+$r->post('/api/projects/{id}/integrations/discord', [Api\ToolsApi::class, 'saveDiscord']);
+$r->post('/api/projects/{id}/integrations/discord/test', [Api\ToolsApi::class, 'testDiscord']);
+$r->post('/api/projects/{id}/integrations/github', [Api\ToolsApi::class, 'saveGithub']);
+$r->post('/api/projects/{id}/integrations/github/refresh', [Api\ToolsApi::class, 'refreshGithub']);
+$r->delete('/api/projects/{id}/integrations/{provider}', [Api\ToolsApi::class, 'removeIntegration']);
+
+// 1.6: calendars, events, personal tasks, Google
+$r->get('/api/events/{id}', [Api\CalendarApi::class, 'showEvent']);
+$r->post('/api/events', [Api\CalendarApi::class, 'createEvent']);
+$r->patch('/api/events/{id}', [Api\CalendarApi::class, 'updateEvent']);
+$r->post('/api/events/{id}/move', [Api\CalendarApi::class, 'moveEvent']);
+$r->post('/api/events/{id}/cancel', [Api\CalendarApi::class, 'cancelEvent']);
+$r->post('/api/events/{id}/restore', [Api\CalendarApi::class, 'restoreEvent']);
+$r->delete('/api/events/{id}', [Api\CalendarApi::class, 'deleteEvent']);
+$r->post('/api/calendars', [Api\CalendarApi::class, 'createCalendar']);
+$r->patch('/api/calendars/{id}', [Api\CalendarApi::class, 'updateCalendar']);
+$r->delete('/api/calendars/{id}', [Api\CalendarApi::class, 'deleteCalendar']);
+$r->post('/api/calendars/{id}/shown', [Api\CalendarApi::class, 'showCalendar']);
+$r->post('/api/calendars/{id}/members', [Api\CalendarApi::class, 'calendarMember']);
+$r->post('/api/calendar-layers', [Api\CalendarApi::class, 'layer']);
+$r->post('/api/my-tasks', [Api\CalendarApi::class, 'createMyTask']);
+$r->patch('/api/my-tasks/{id}', [Api\CalendarApi::class, 'updateMyTask']);
+$r->delete('/api/my-tasks/{id}', [Api\CalendarApi::class, 'deleteMyTask']);
+$r->post('/api/my-lists', [Api\CalendarApi::class, 'createMyList']);
+$r->patch('/api/my-lists/{id}', [Api\CalendarApi::class, 'updateMyList']);
+$r->delete('/api/my-lists/{id}', [Api\CalendarApi::class, 'deleteMyList']);
+$r->post('/api/my-lists/{id}/reorder', [Api\CalendarApi::class, 'reorderMyList']);
+$r->post('/api/my-lists/{id}/google', [Api\CalendarApi::class, 'linkMyList']);
+$r->get('/api/google/calendars', [Api\CalendarApi::class, 'googleCalendars']);
+$r->post('/api/google/calendars', [Api\CalendarApi::class, 'googleChoose']);
+$r->post('/api/google/sync', [Api\CalendarApi::class, 'googleSync']);
+$r->post('/api/google/disconnect', [Api\CalendarApi::class, 'googleDisconnect']);
+// 1.9: Borealis → Google Calendar, e-mail test
+$r->get('/api/google/export', [Api\CalendarApi::class, 'exportStatus']);
+$r->post('/api/google/export', [Api\CalendarApi::class, 'exportConfigure']);
+$r->post('/api/google/export/sync', [Api\CalendarApi::class, 'exportSync']);
+$r->post('/api/google/export/stop', [Api\CalendarApi::class, 'exportStop']);
+$r->post('/api/mail/test', [Api\ToolsApi::class, 'mailTest']);
+
+$r->post('/api/teams', [Api\TeamApi::class, 'create']);
+$r->patch('/api/teams/{id}', [Api\TeamApi::class, 'update']);
+$r->post('/api/teams/{id}/archive', [Api\TeamApi::class, 'archive']);
+$r->post('/api/teams/{id}/restore', [Api\TeamApi::class, 'restore']);
+$r->delete('/api/teams/{id}', [Api\TeamApi::class, 'delete']);
+$r->post('/api/teams/{id}/members', [Api\TeamApi::class, 'addMember']);
+$r->patch('/api/teams/{id}/members/{uid}', [Api\TeamApi::class, 'updateMember']);
+$r->delete('/api/teams/{id}/members/{uid}', [Api\TeamApi::class, 'removeMember']);
+$r->post('/api/teams/{id}/projects', [Api\TeamApi::class, 'assignProject']);
+
+$r->post('/api/projects', [Api\ProjectApi::class, 'create']);
+$r->post('/api/projects/import', [Api\ProjectApi::class, 'import']);
+$r->get('/api/projects/{id}', [Api\ProjectApi::class, 'show']);
+$r->patch('/api/projects/{id}', [Api\ProjectApi::class, 'update']);
+$r->post('/api/projects/{id}/archive', [Api\ProjectApi::class, 'archive']);
+$r->post('/api/projects/{id}/restore', [Api\ProjectApi::class, 'restore']);
+$r->get('/api/projects/{id}/members', [Api\ProjectApi::class, 'members']);
+$r->post('/api/projects/{id}/members', [Api\ProjectApi::class, 'addMember']);
+$r->delete('/api/projects/{id}/members/{uid}', [Api\ProjectApi::class, 'removeMember']);
+$r->post('/api/projects/{id}/teams', [Api\ProjectApi::class, 'addTeam']);
+$r->delete('/api/projects/{id}/teams/{tid}', [Api\ProjectApi::class, 'removeTeam']);
+$r->post('/api/projects/{id}/modules', [Api\ProjectApi::class, 'module']);
+$r->post('/api/projects/{id}/statuses', [Api\ProjectApi::class, 'saveStatus']);
+$r->patch('/api/projects/{id}/statuses/{sid}', [Api\ProjectApi::class, 'saveStatus']);
+$r->post('/api/projects/{id}/statuses/{sid}/move', [Api\ProjectApi::class, 'moveStatus']);
+$r->delete('/api/projects/{id}/statuses/{sid}', [Api\ProjectApi::class, 'deleteStatus']);
+$r->post('/api/projects/{id}/labels', [Api\ProjectApi::class, 'saveLabel']);
+$r->patch('/api/projects/{id}/labels/{lid}', [Api\ProjectApi::class, 'saveLabel']);
+$r->delete('/api/projects/{id}/labels/{lid}', [Api\ProjectApi::class, 'deleteLabel']);
+$r->post('/api/projects/{id}/tasks', [Api\TaskApi::class, 'create']);
+$r->get('/api/projects/{id}/tasks', [Api\TaskApi::class, 'index']);
+
+$r->post('/api/tasks/bulk', [Api\TaskApi::class, 'bulk']);
+$r->get('/api/tasks/{id}', [Api\TaskApi::class, 'show']);
+$r->patch('/api/tasks/{id}', [Api\TaskApi::class, 'update']);
+$r->delete('/api/tasks/{id}', [Api\TaskApi::class, 'delete']);
+$r->post('/api/tasks/{id}/move', [Api\TaskApi::class, 'move']);
+$r->post('/api/tasks/{id}/people', [Api\TaskApi::class, 'movePerson']);
+$r->delete('/api/tasks/{id}/people/{uid}', [Api\TaskApi::class, 'removePerson']);
+$r->post('/api/tasks/{id}/backlog-move', [Api\TaskApi::class, 'backlogMove']);
+$r->post('/api/tasks/{id}/done', [Api\TaskApi::class, 'done']);
+$r->post('/api/tasks/{id}/duplicate', [Api\TaskApi::class, 'duplicate']);
+$r->post('/api/tasks/{id}/comments', [Api\TaskApi::class, 'comment']);
+$r->post('/api/tasks/{id}/time', [Api\TaskApi::class, 'logTime']);
+$r->post('/api/tasks/{id}/wrap-up', [Api\TaskApi::class, 'wrapUp']);
+$r->delete('/api/time/{id}', [Api\TaskApi::class, 'deleteTime']);
+$r->patch('/api/time/{id}', [Api\TaskApi::class, 'updateTime']);
+$r->post('/api/tasks/{id}/explanations', [Api\TaskApi::class, 'explain']);
+$r->post('/api/monitoring/alerts/{id}/ack', [C\MonitoringController::class, 'ack']);
+$r->post('/api/monitoring/scan', [C\MonitoringController::class, 'scan']);
+$r->patch('/api/monitoring/settings', [C\MonitoringController::class, 'saveSettings']);
+$r->get('/api/analysis/estimate', [C\AnalysisController::class, 'estimate']);
+$r->post('/api/analysis/sprints/{id}/simulate', [C\AnalysisController::class, 'simulate']);
+$r->post('/api/analysis/sprints/{id}/apply', [C\AnalysisController::class, 'apply']);
+$r->post('/api/analysis/scenarios/{id}/revert', [C\AnalysisController::class, 'revert']);
+$r->patch('/api/analysis/settings', [C\AnalysisController::class, 'saveSettings']);
+$r->patch('/api/comments/{id}', [Api\TaskApi::class, 'updateComment']);
+$r->delete('/api/comments/{id}', [Api\TaskApi::class, 'deleteComment']);
+$r->post('/api/tasks/{id}/links', [Api\TaskApi::class, 'addLink']);
+$r->delete('/api/tasks/{id}/links/{lid}', [Api\TaskApi::class, 'removeLink']);
+
+$r->post('/api/projects/{id}/files', [Api\PlanningApi::class, 'upload']);
+$r->patch('/api/files/{id}', [Api\PlanningApi::class, 'moveFile']);
+$r->delete('/api/files/{id}', [Api\PlanningApi::class, 'deleteFile']);
+$r->post('/api/projects/{id}/folders', [Api\PlanningApi::class, 'createFolder']);
+$r->patch('/api/projects/{id}/folders/{fid}', [Api\PlanningApi::class, 'renameFolder']);
+$r->delete('/api/projects/{id}/folders/{fid}', [Api\PlanningApi::class, 'deleteFolder']);
+$r->post('/api/projects/{id}/sprints', [Api\PlanningApi::class, 'createSprint']);
+$r->patch('/api/sprints/{id}', [Api\PlanningApi::class, 'updateSprint']);
+$r->patch('/api/sprints/{id}/capacity', [Api\PlanningApi::class, 'sprintCapacity']);
+$r->post('/api/sprints/{id}/start', [Api\PlanningApi::class, 'startSprint']);
+$r->post('/api/sprints/{id}/complete', [Api\PlanningApi::class, 'completeSprint']);
+$r->delete('/api/sprints/{id}', [Api\PlanningApi::class, 'deleteSprint']);
+$r->post('/api/projects/{id}/epics', [Api\PlanningApi::class, 'saveEpic']);
+$r->patch('/api/projects/{id}/epics/{eid}', [Api\PlanningApi::class, 'saveEpic']);
+$r->delete('/api/projects/{id}/epics/{eid}', [Api\PlanningApi::class, 'deleteEpic']);
+$r->post('/api/projects/{id}/docs', [Api\PlanningApi::class, 'saveDoc']);
+$r->patch('/api/projects/{id}/docs/{did}', [Api\PlanningApi::class, 'saveDoc']);
+$r->delete('/api/projects/{id}/docs/{did}', [Api\PlanningApi::class, 'deleteDoc']);
+
+return $r;

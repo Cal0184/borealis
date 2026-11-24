@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "members": [
+    {"id": "u1", "name": "Lucía Prueba", "title": "Coordinación", "email": "lucia@legacy.example", "color": "#4fbd98"},
+    {"id": "u2", "name": "Tomás Prueba", "title": "Desarrollo", "email": "no-es-un-correo", "color": "#0ea5e9"},
+    {"id": "u3", "name": "Ana Admin", "title": "", "email": "admin@example.test", "color": "#f59e0b"}
+  ],
+  "teams": [
+    {"id": "e1", "name": "Equipo Legado", "description": "Equipo de la versión anterior", "leadId": "u1", "memberIds": ["u1", "u2"]}
+  ],
+  "projects": [
+    {"id": "p1", "key": "LEG", "name": "Proyecto legado", "description": "Importado", "teamId": "e1", "status": "active", "startDate": "2026-10-01", "dueDate": "2026-12-01"},
+    {"id": "p2", "key": "LEG", "name": "Clave repetida", "description": "", "teamId": null, "status": "active", "startDate": null, "dueDate": null},
+    {"id": "p3", "key": "mal clave!", "name": "Sin estados", "description": "", "teamId": "", "status": "raro", "startDate": "2026-13-40", "dueDate": ""}
+  ],
+  "statuses": [
+    {"id": "p1-todo", "projectId": "p1", "name": "Por hacer", "color": "#7e9a9a", "position": 0, "isDone": false},
+    {"id": "p1-doing", "projectId": "p1", "name": "Haciendo", "color": "#0ea5e9", "position": 1, "isDone": false},
+    {"id": "p1-done", "projectId": "p1", "name": "Hecho", "color": "#10b981", "position": 2, "isDone": true},
+    {"id": "p2-todo", "projectId": "p2", "name": "Pendiente", "color": "#7e9a9a", "position": 0, "isDone": false}
+  ],
+  "sprints": [
+    {"id": "s1", "projectId": "p1", "name": "Sprint 01", "goal": "Arrancar", "startDate": "2026-10-20", "endDate": "2026-11-03", "status": "active"},
+    {"id": "s2", "projectId": "p1", "name": "Sprint 02", "goal": "", "startDate": null, "endDate": null, "status": "active"}
+  ],
+  "tasks": [
+    {"id": "t1", "code": "LEG-101", "projectId": "p1", "title": "Diseñar inicio", "description": "Con <script>alert(1)</script> dentro", "type": "feature", "priority": "high", "statusId": "p1-doing", "assigneeId": "u1", "reporterId": "u3", "startDate": "2026-10-20", "dueDate": "2026-10-30", "points": 5, "labels": ["Diseño", "Interfaz"], "sprintId": "s1",
+     "checklist": [{"id": "c1", "text": "Boceto", "done": true}, {"id": "c2", "text": "Revisión", "done": false}],
+     "comments": [{"id": "c3", "text": "Empiezo mañana", "actorId": "u1", "createdAt": "2026-10-21T10:00:00Z"}],
+     "createdAt": "2026-10-19T09:00:00Z", "updatedAt": "2026-10-21T10:00:00Z"},
+    {"id": "t2", "code": "LEG-102", "projectId": "p1", "title": "Publicar", "description": "", "type": "issue", "priority": "low", "statusId": "p1-done", "assigneeId": "u9", "reporterId": "u1", "startDate": null, "dueDate": null, "points": 0, "labels": [], "sprintId": null, "checklist": [], "comments": [], "createdAt": "2026-10-19T09:00:00Z", "updatedAt": "2026-10-22T09:00:00Z"},
+    {"id": "t3", "code": "LEG-102", "projectId": "p1", "title": "Código duplicado", "description": "", "type": "task", "priority": "medium", "statusId": "desconocido", "assigneeId": null, "reporterId": null, "startDate": null, "dueDate": null, "points": null, "labels": null, "sprintId": "s9", "checklist": null, "comments": null, "createdAt": "fecha mala", "updatedAt": null},
+    {"id": "t4", "code": "X-1", "projectId": "p3", "title": "Tarea en proyecto sin estados", "description": "", "type": "task", "priority": "medium", "statusId": "", "assigneeId": "u2", "reporterId": "u2", "startDate": null, "dueDate": null, "points": 2, "labels": ["Calidad"], "sprintId": null, "checklist": [], "comments": [], "createdAt": "2026-10-19T09:00:00Z", "updatedAt": "2026-10-19T09:00:00Z"}
+  ],
+  "documents": [
+    {"id": "f1", "name": "acta.txt", "mime": "text/plain", "size": 31, "projectId": "p1", "storageName": "0123456789abcdef0123456789abcdef.bin", "addedAt": "2026-10-22T12:00:00Z"},
+    {"id": "f2", "name": "malicioso.php.txt", "mime": "text/plain", "size": 15, "projectId": "p1", "storageName": "fedcba9876543210fedcba9876543210.bin", "addedAt": "2026-10-22T12:00:00Z"},
+    {"id": "f3", "name": "falta.pdf", "mime": "application/pdf", "size": 10, "projectId": "p2", "storageName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bin", "addedAt": "2026-10-22T12:00:00Z"},
+    {"id": "f4", "name": "../../escape.txt", "mime": "text/plain", "size": 10, "projectId": "p1", "storageName": "../../config/config.php", "addedAt": "2026-10-22T12:00:00Z"}
+  ],
+  "activity": []
+}

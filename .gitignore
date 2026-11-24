@@ -1,0 +1,13 @@
+/config/config.php
+/storage/*
+!/storage/.htaccess
+!/storage/backups/
+!/storage/logs/
+!/storage/uploads/
+/storage/backups/*
+!/storage/backups/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/tests/e2e/screenshots/

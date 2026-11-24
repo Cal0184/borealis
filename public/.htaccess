@@ -1,0 +1,20 @@
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Never execute anything inside assets
+<FilesMatch "\.(php|phtml|phar)$">
+  <If "%{REQUEST_URI} =~ m#/assets/#">
+    Require all denied
+  </If>
+</FilesMatch>

@@ -1,0 +1,214 @@
+<?php
+declare(strict_types=1);
+
+namespace Borealis\Api;
+
+use Borealis\Core\Auth;
+use Borealis\Core\HttpException;
+use Borealis\Core\Request;
+use Borealis\Core\Response;
+use Borealis\Core\Validator;
+use Borealis\Security\AccountPolicy;
+use Borealis\Security\Policy;
+use Borealis\Services\Avatars;
+use Borealis\Services\Backup;
+use Borealis\Services\Notifications;
+use Borealis\Services\Users;
+use Borealis\Services\Workspaces;
+
+final class WorkspaceApi
+{
+    public function switch(Request $r): Response
+    {
+        Workspaces::switchTo((int)$r->input('workspace_id'));
+        return Response::ok(['redirect' => url('/')], 'Cambiaste de espacio');
+    }
+
+    public function create(Request $r): Response
+    {
+        // 1.4.1: only the installation's administration, unless config app.allow_workspace_creation = true.
+        AccountPolicy::authorizeCreateWorkspace();
+        $v = Validator::check($r->input(), ['name' => 'required,string,max:120']);
+        $id = Workspaces::create($v['name'], Auth::id());
+        Workspaces::switchTo($id);
+        return Response::ok(['id' => $id, 'redirect' => url('/')], 'Espacio creado');
+    }
+
+    public function update(Request $r): Response
+    {
+        Workspaces::rename((string)$r->input('name'));
+        return Response::ok();
+    }
+
+    public function createUser(Request $r): Response
+    {
+        $in = $r->input();
+        $res = Workspaces::createUser($in);
+        if (isset($res['invitation'])) {
+            // The e-mail already has an account: it joins only by accepting this invitation with its own password.
+            $inv = $res['invitation'];
+            return Response::ok($inv + [
+                'invited' => true,
+                'share_text' => "Te invito a unirte a Borealis. Abre este enlace y entra con tu cuenta de siempre para aceptar (vale 14 días):\n" . $inv['link'],
+                'share_title' => 'Esa persona ya tiene cuenta en Borealis, así que no se creó otra ni se cambió su contraseña. Se generó una invitación: copia este mensaje y envíaselo para que la acepte.',
+            ], 'Invitación creada');
+        }
+        $id = $res['id'];
+        $login = absolute_url('/login');
+        // Text the admin can copy and send: Borealis does not send e-mail.
+        $share = "Te creé una cuenta en Borealis.\nEntra en: $login\nCorreo: " . mb_strtolower((string)($in['email'] ?? '')) . "\nContraseña temporal: " . (string)($in['password'] ?? '') . "\nCámbiala en tu perfil al entrar.";
+        return Response::ok(['id' => $id, 'share_text' => $share, 'share_title' => 'Cuenta creada. Copia estos datos y envíaselos a la persona:'], 'Integrante incorporado');
+    }
+
+    public function updateMember(Request $r): Response
+    {
+        $id = $r->intParam('id');
+        $account = array_intersect_key($r->input(), array_flip(['name', 'email', 'title']));
+        if ($account) {
+            Workspaces::updateAccount($id, $account);
+            if (!$r->has('role_id') && !$r->has('status') && !$r->has('weekly_hours')) return Response::ok([], 'Cuenta actualizada');
+        }
+        if ($r->has('role_id')) Workspaces::changeMemberRole($id, (int)$r->input('role_id'));
+        if ($r->has('status')) Workspaces::setMemberStatus($id, (string)$r->input('status'));
+        if ($r->has('weekly_hours')) Workspaces::setWeeklyHours($id, $r->input('weekly_hours'));
+        return Response::ok([], $r->has('weekly_hours') ? 'Horas semanales guardadas' : 'Guardado');
+    }
+
+    public function resetPassword(Request $r): Response
+    {
+        Workspaces::resetPassword($r->intParam('id'), (string)$r->input('password'));
+        return Response::ok([], 'Contraseña restablecida');
+    }
+
+    public function invite(Request $r): Response
+    {
+        $inv = Workspaces::invite($r->input());
+        $inv['share_text'] = "Te invito a unirte a Borealis. Abre este enlace para crear tu cuenta (vale 14 días):\n" . $inv['link'];
+        $inv['share_title'] = 'Invitación lista. Borealis no envía correos: copia este mensaje y envíalo por WhatsApp, correo o chat.';
+        return Response::ok($inv, 'Invitación creada');
+    }
+
+    public function renewInvite(Request $r): Response
+    {
+        $inv = Workspaces::renewInvitation($r->intParam('id'));
+        $inv['share_text'] = "Te invito a unirte a Borealis. Abre este enlace para crear tu cuenta (vale 14 días):\n" . $inv['link'];
+        $inv['share_title'] = 'Enlace nuevo para ' . $inv['email'] . '. El anterior deja de funcionar. Copia este mensaje y envíalo:';
+        $inv['share_dialog'] = true;
+        return Response::ok($inv, 'Enlace nuevo generado');
+    }
+
+    public function revokeInvite(Request $r): Response
+    {
+        Workspaces::revokeInvitation($r->intParam('id'));
+        return Response::ok([], 'Invitación anulada');
+    }
+
+    public function saveRole(Request $r): Response
+    {
+        $id = Workspaces::saveRole(isset($r->params['id']) ? $r->intParam('id') : null, $r->input());
+        return Response::ok(['id' => $id]);
+    }
+
+    public function deleteRole(Request $r): Response
+    {
+        Workspaces::deleteRole($r->intParam('id'));
+        return Response::ok([], 'Rol eliminado');
+    }
+
+    public function savePriority(Request $r): Response
+    {
+        $id = Workspaces::savePriority(isset($r->params['id']) ? $r->intParam('id') : null, $r->input());
+        return Response::ok(['id' => $id]);
+    }
+
+    public function deletePriority(Request $r): Response
+    {
+        Workspaces::deletePriority($r->intParam('id'));
+        return Response::ok([], 'Prioridad eliminada');
+    }
+
+    public function backup(Request $r): Response
+    {
+        if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden('Solo la administración de la instalación puede crear copias completas.');
+        $file = Backup::create(null, 'manual');
+        return Response::ok(['file' => basename($file)], 'Copia de seguridad creada');
+    }
+
+    /** Applies pending migrations from the browser (for hosting without shell access). Always backs up first. */
+    public function migrate(Request $r): Response
+    {
+        if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden('Solo la administración de la instalación puede actualizar la base de datos.');
+        $m = new \Borealis\Core\Migrator(\Borealis\Core\Database::get()->pdo);
+        if (!$m->pending()) return Response::ok(['applied' => []], 'La base de datos ya estaba al día');
+        $file = Backup::create(null, 'pre-update');
+        $ran = $m->migrate();
+        return Response::ok(['applied' => $ran, 'backup' => basename($file)], 'Base de datos actualizada (' . count($ran) . ' migraciones). Copia previa: ' . basename($file));
+    }
+
+    /** Imports a Borealis v0.2 export (borealis.json or a ZIP of the old folder). A full backup is made first. */
+    public function importLegacy(Request $r): Response
+    {
+        Policy::authorize('workspace.manage');
+        $f = $_FILES['file'] ?? null;
+        if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)$f['tmp_name'])) {
+            throw HttpException::invalid(['file' => 'Selecciona el archivo borealis.json o el ZIP de la versión anterior.']);
+        }
+        $name = strtolower((string)$f['name']);
+        if (!str_ends_with($name, '.json') && !str_ends_with($name, '.zip')) throw HttpException::invalid(['file' => 'Usa el archivo borealis.json o un .zip de la versión anterior.']);
+        [$data, $reader, $hash] = \Borealis\Services\LegacyImport::open((string)$f['tmp_name'], $name);
+        \Borealis\Services\LegacyImport::assertNotImported($hash);
+        $backup = Backup::create(null, 'pre-import');
+        $rep = \Borealis\Services\LegacyImport::run($data, $reader, $hash);
+        $msg = "Importados {$rep['projects']} proyectos, {$rep['tasks']} tareas y {$rep['comments']} comentarios";
+        return Response::ok(['report' => $rep, 'backup' => basename($backup)], $msg);
+    }
+
+    /** 1.7: profile photo (already cropped to a square in the browser). */
+    public function photo(Request $r): Response
+    {
+        Avatars::save($r->files['photo'] ?? null);
+        return Response::ok(['url' => Avatars::urlFor(Auth::id(), 'lg')], 'Fotografía guardada');
+    }
+
+    public function removePhoto(Request $r): Response
+    {
+        Avatars::remove();
+        return Response::ok([], 'Fotografía eliminada');
+    }
+
+    public function profile(Request $r): Response
+    {
+        \Borealis\Core\Database::get()->transaction(function () use ($r) {
+            Users::updateProfile($r->input());
+            if ($r->has('weekly_hours')) Workspaces::setWeeklyHours(Auth::id(), $r->input('weekly_hours'));
+        });
+        return Response::ok();
+    }
+
+    public function password(Request $r): Response
+    {
+        if ((string)$r->input('password') !== (string)$r->input('password_confirm')) {
+            throw HttpException::invalid(['password_confirm' => 'Las contraseñas no coinciden.']);
+        }
+        Users::changePassword((string)$r->input('current_password'), (string)$r->input('password'));
+        return Response::ok([], 'Contraseña actualizada');
+    }
+
+    public function prefs(Request $r): Response
+    {
+        return Response::ok(['prefs' => Users::savePrefs($r->input())], 'Preferencias guardadas');
+    }
+
+    public function read(Request $r): Response
+    {
+        Notifications::markRead($r->intParam('id'));
+        return Response::ok(['unread' => Notifications::unreadCount()], '');
+    }
+
+    public function readAll(Request $r): Response
+    {
+        Notifications::markAllRead();
+        Policy::wsId();
+        return Response::ok(['unread' => 0], 'Notificaciones leídas');
+    }
+}
