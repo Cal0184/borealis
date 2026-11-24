@@ -154,6 +154,9 @@ final class Tasks
         return self::find((int)$id);
     }
 
+    /** 1.14 · kinds of quick work (and of unplanned work in any project). */
+    public const WORK_TYPES = ['request' => 'Solicitud imprevista', 'urgent' => 'Urgente', 'admin' => 'Administrativa', 'weekly' => 'De la semana', 'short' => 'Corta', 'other' => 'Otra'];
+
     private static function rules(bool $creating): array
     {
         $r = [
@@ -161,6 +164,7 @@ final class Tasks
             'assignee_id' => 'nullable,int', 'team_id' => 'nullable,int', 'due_date' => 'nullable,date', 'due_time' => 'nullable,time', 'start_date' => 'nullable,date', 'epic_id' => 'nullable,int', 'sprint_id' => 'nullable,int',
             'estimate' => 'nullable,number', 'estimate_hours' => 'nullable,number', 'remaining_hours' => 'nullable,number', 'is_blocked' => 'nullable,bool', 'blocked_reason' => 'nullable,string,max:255', 'parent_id' => 'nullable,int',
             'drive_url' => 'nullable,string,max:500', 'github_url' => 'nullable,string,max:500',
+            'is_milestone' => 'nullable,bool', 'unplanned' => 'nullable,bool', 'work_type' => 'nullable,in:' . implode('|', array_keys(self::WORK_TYPES)),
         ];
         if (!$creating) {
             unset($r['parent_id']);
@@ -252,7 +256,7 @@ final class Tasks
         Notifications::send($uid, 'assigned', "Ya no eres responsable de {$t['task_key']}: {$t['title']}", url('/t/' . $t['task_key']), (int)$t['project_id'], (int)$t['id']);
     }
 
-    private static function responsibleIdsDirect(array $t): array
+    public static function responsibleIdsDirect(array $t): array
     {
         return array_values(array_filter(array_map('intval', array_merge([$t['assignee_id'] ?? 0], array_column($t['co_assignees'] ?? [], 'id')))));
     }
@@ -340,6 +344,12 @@ final class Tasks
                 'epic_id' => $v['epic_id'] ?: null, 'sprint_id' => $v['sprint_id'] ?: null, 'estimate' => $v['estimate'], 'estimate_hours' => $v['estimate_hours'] ?? null, 'start_date' => $v['start_date'], 'due_date' => $v['due_date'], 'due_time' => ($v['due_date'] ?? null) ? (($v['due_time'] ?? null) ?: null) : null,
                 'position' => $pos, 'backlog_position' => $bpos, 'is_blocked' => !empty($v['is_blocked']) ? 1 : 0, 'blocked_reason' => $v['blocked_reason'],
                 'drive_url' => $v['drive_url'] ?? null, 'github_url' => $v['github_url'] ?? null,
+                // 1.14: original plan, who estimated, milestone and unplanned work
+                'baseline_start' => $v['start_date'] ?: null, 'baseline_due' => $v['due_date'] ?: null,
+                'admin_estimate_hours' => isset($v['estimate_hours']) && $v['estimate_hours'] !== null && $v['estimate_hours'] !== '' && TaskEstimates::canManage(['project' => $p]) ? $v['estimate_hours'] : null,
+                'worker_estimate_hours' => isset($v['estimate_hours']) && $v['estimate_hours'] !== null && $v['estimate_hours'] !== '' && !TaskEstimates::canManage(['project' => $p]) ? $v['estimate_hours'] : null,
+                'is_milestone' => !empty($v['is_milestone']) ? 1 : 0, 'unplanned' => (!empty($v['unplanned']) || in_array($v['work_type'] ?? null, ['urgent', 'request'], true)) ? 1 : 0,
+                'work_type' => !empty($v['work_type']) ? $v['work_type'] : null,
                 'started_at' => $status['category'] !== 'todo' ? now() : null, 'blocked_at' => !empty($v['is_blocked']) ? now() : null, 'blocked_by' => !empty($v['is_blocked']) ? Auth::id() : null,
                 'remaining_hours' => isset($v['remaining_hours']) && $v['remaining_hours'] !== '' ? $v['remaining_hours'] : null,
                 'completed_at' => $status['category'] === 'done' ? now() : null, 'completed_due_date' => $status['category'] === 'done' ? ($v['due_date'] ?? null) : null, 'created_at' => now(), 'updated_at' => now(),
@@ -348,6 +358,11 @@ final class Tasks
         $t = self::find($id);
         if ($t['sprint_id'] && !$t['parent_id']) Monitoring::trackSprintTask((int)$t['sprint_id'], $t);
         if (!empty($input['label_ids']) && is_array($input['label_ids'])) self::setLabels($id, $input['label_ids']);
+        // 1.14: the first estimate opens the estimate history (administration or worker, and the agreed one)
+        if (isset($v['estimate_hours']) && $v['estimate_hours'] !== null && $v['estimate_hours'] !== '') {
+            TaskEstimates::record($id, TaskEstimates::canManage(['project' => $p]) ? 'admin' : 'worker', null, (float)$v['estimate_hours'], null);
+            TaskEstimates::record($id, 'agreed', null, (float)$v['estimate_hours'], 'Estimación al crear la tarea');
+        }
         Activity::log('created', 'task', $id, ($t['parent_id'] ? 'Creó la subtarea ' : 'Creó la tarea ') . "{$t['task_key']} «{$t['title']}»", $projectId, $t['parent_id'] ? (int)$t['parent_id'] : $id);
         GoogleExport::touchTask($id);
         if ($t['assignee_id']) {
@@ -365,7 +380,7 @@ final class Tasks
     private const FIELD_LABELS = [
         'title' => 'el título', 'description' => 'la descripción', 'status_id' => 'el estado', 'priority_id' => 'la prioridad', 'assignee_id' => 'el responsable', 'team_id' => 'el equipo responsable',
         'due_date' => 'el vencimiento', 'due_time' => 'la hora de entrega', 'start_date' => 'el inicio', 'epic_id' => 'la épica', 'sprint_id' => 'el sprint', 'estimate' => 'la estimación', 'estimate_hours' => 'las horas estimadas', 'remaining_hours' => 'las horas restantes',
-        'is_blocked' => 'el bloqueo', 'blocked_reason' => 'el motivo del bloqueo', 'drive_url' => 'la carpeta de Drive', 'github_url' => 'el repositorio de GitHub',
+        'is_blocked' => 'el bloqueo', 'blocked_reason' => 'el motivo del bloqueo', 'is_milestone' => 'el hito', 'unplanned' => 'si es imprevista', 'work_type' => 'el tipo de trabajo', 'drive_url' => 'la carpeta de Drive', 'github_url' => 'el repositorio de GitHub',
     ];
 
     public static function update(int $id, array $input): array
@@ -375,6 +390,8 @@ final class Tasks
         Policy::authorizeProject($p, 'task.edit');
         $v = Validator::check($input, self::rules(false));
         self::normalizeLinks($v);
+        // 1.14: optional reason of the change, kept in the audit log (never in the task itself)
+        self::$reason = isset($input['change_reason']) && is_string($input['change_reason']) ? mb_substr(trim($input['change_reason']), 0, 500) : null;
         if (!$v && !array_key_exists('label_ids', $input) && !array_key_exists('assignee_ids', $input)) return $t;
         // 1.9: removing the date removes the hour too; an hour alone needs a date
         if (array_key_exists('due_date', $v) && !$v['due_date']) $v['due_time'] = null;
@@ -384,7 +401,7 @@ final class Tasks
         self::checkRefs($p, $merged);
         $data = [];
         foreach ($v as $k => $val) {
-            if ($k === 'is_blocked') $val = $val ? 1 : 0;
+            if ($k === 'is_blocked' || $k === 'is_milestone' || $k === 'unplanned') $val = $val ? 1 : 0;
             if (in_array($k, ['priority_id', 'assignee_id', 'team_id', 'epic_id', 'sprint_id'], true)) $val = $val ?: null;
             if ($k === 'status_id' && !$val) continue;
             if ((string)$val !== (string)($t[$k] ?? '')) $data[$k] = $val;
@@ -418,7 +435,11 @@ final class Tasks
                 Capacity::guard($t, $sprint ? (int)$sprint : null, $hours !== null && $hours !== '' ? (float)$hours : null, $people);
             }
             if ($data) {
+                // 1.14: the first dates a task gets are its original plan (baseline for the Gantt)
+                if (array_key_exists('due_date', $data) && $data['due_date'] && empty($t['baseline_due'])) $data['baseline_due'] = $data['due_date'];
+                if (array_key_exists('start_date', $data) && $data['start_date'] && empty($t['baseline_start'])) $data['baseline_start'] = $data['start_date'];
                 Database::get()->update('tasks', $data + ['updated_at' => now()], 'id = ?', [$id]);
+                if (array_key_exists('estimate_hours', $data)) TaskEstimates::editedInline($t, $data['estimate_hours'] !== null && $data['estimate_hours'] !== '' ? (float)$data['estimate_hours'] : null);
                 self::afterChange($t, $data);
             }
             if (array_key_exists('label_ids', $input)) self::setLabels($id, (array)$input['label_ids']);
@@ -484,15 +505,20 @@ final class Tasks
         }
     }
 
+    /** 1.14: reason given for the change being saved (audit). */
+    private static ?string $reason = null;
+
     /** Activity + notifications for a set of changed columns. */
     private static function afterChange(array $t, array $data): void
     {
+        $why = ['reason' => self::$reason];
         $pid = (int)$t['project_id'];
         $logTask = $t['parent_id'] ? (int)$t['parent_id'] : (int)$t['id'];
         $fields = array_values(array_intersect(array_keys(self::FIELD_LABELS), array_keys($data)));
         if (isset($data['status_id'])) {
             $s = Projects::status($pid, (int)$data['status_id']);
-            Activity::log('status_changed', 'task', (int)$t['id'], "Movió {$t['task_key']} a «{$s['name']}»", $pid, $logTask, ['from' => $t['status_name'], 'to' => $s['name']]);
+            Activity::log('status_changed', 'task', (int)$t['id'], "Movió {$t['task_key']} a «{$s['name']}»", $pid, $logTask, ['from' => $t['status_name'], 'to' => $s['name']],
+                null, $why + ['before' => ['estado' => $t['status_name']], 'after' => ['estado' => $s['name']]]);
             $fields = array_values(array_diff($fields, ['status_id']));
             if ($s['category'] === 'done' && $t['status_category'] !== 'done' && $t['reporter_id'] && (int)$t['reporter_id'] !== (int)$t['assignee_id']) {
                 Notifications::send((int)$t['reporter_id'], 'status', "{$t['task_key']} finalizada: {$t['title']}", url('/t/' . $t['task_key']), $pid, (int)$t['id']);
@@ -500,7 +526,8 @@ final class Tasks
         }
         if (array_key_exists('assignee_id', $data)) {
             $name = $data['assignee_id'] ? (Users::find((int)$data['assignee_id'])['name'] ?? '') : null;
-            Activity::log('assigned', 'task', (int)$t['id'], $name ? "Asignó {$t['task_key']} a $name" : "Quitó el responsable de {$t['task_key']}", $pid, $logTask);
+            Activity::log('assigned', 'task', (int)$t['id'], $name ? "Asignó {$t['task_key']} a $name" : "Quitó el responsable de {$t['task_key']}", $pid, $logTask, [],
+                null, $why + ['before' => ['responsable' => $t['assignee_name'] ?? null], 'after' => ['responsable' => $name]]);
             $fields = array_values(array_diff($fields, ['assignee_id']));
             if ($data['assignee_id']) {
                 Notifications::send((int)$data['assignee_id'], 'assigned', "Te asignaron {$t['task_key']}: " . ($data['title'] ?? $t['title']), url('/t/' . $t['task_key']), $pid, (int)$t['id']);
@@ -530,9 +557,24 @@ final class Tasks
             Activity::log($data['is_blocked'] ? 'blocked' : 'unblocked', 'task', (int)$t['id'], ($data['is_blocked'] ? 'Marcó como bloqueada ' : 'Desbloqueó ') . $t['task_key'], $pid, $logTask);
             $fields = array_values(array_diff($fields, ['is_blocked', 'blocked_reason']));
         }
-        if ($fields) {
-            Activity::log('updated', 'task', (int)$t['id'], "Cambió " . implode(', ', array_map(fn($f) => self::FIELD_LABELS[$f], $fields)) . " de {$t['task_key']}", $pid, $logTask, ['fields' => $fields]);
+        // 1.14: date changes are part of the calendar history (category «calendar»), with both values
+        $dateFields = array_values(array_intersect($fields, ['start_date', 'due_date', 'due_time']));
+        if ($dateFields) {
+            $b = []; $a = [];
+            foreach ($dateFields as $f) { $b[$f] = $t[$f] ?? null; $a[$f] = $data[$f] ?: null; }
+            $fmt = fn($d) => $d ? fmt_date((string)$d) : 'sin fecha';
+            $txt = isset($a['due_date']) || array_key_exists('due_date', $a)
+                ? (($b['due_date'] ?? null) && ($a['due_date'] ?? null) ? "Reprogramó {$t['task_key']}: del " . $fmt($b['due_date']) . ' al ' . $fmt($a['due_date']) : "Cambió el vencimiento de {$t['task_key']}: " . $fmt($b['due_date'] ?? null) . ' → ' . $fmt($a['due_date'] ?? null))
+                : 'Cambió ' . implode(', ', array_map(fn($f) => self::FIELD_LABELS[$f], $dateFields)) . " de {$t['task_key']}";
+            Activity::log('due_changed', 'task', (int)$t['id'], $txt, $pid, $logTask, ['fields' => $dateFields], null, $why + ['before' => $b, 'after' => $a, 'category' => 'calendar']);
+            $fields = array_values(array_diff($fields, $dateFields));
         }
+        if ($fields) {
+            $b = []; $a = [];
+            foreach ($fields as $f) if (!in_array($f, ['description'], true)) { $b[$f] = $t[$f] ?? null; $a[$f] = $data[$f] ?? null; }
+            Activity::log('updated', 'task', (int)$t['id'], "Cambió " . implode(', ', array_map(fn($f) => self::FIELD_LABELS[$f], $fields)) . " de {$t['task_key']}", $pid, $logTask, ['fields' => $fields], null, $why + ['before' => $b, 'after' => $a]);
+        }
+        self::$reason = null;
     }
 
     /** Move on the board: into $statusId, placed right after $afterId (null = top). */

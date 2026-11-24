@@ -50,6 +50,7 @@ final class Monitoring
         'overdue' => 'Tarea vencida', 'due_soon' => 'Tarea importante próxima a vencer', 'sprint_pending' => 'Sprint con compromisos pendientes',
         'overload' => 'Trabajo planificado superior a la capacidad', 'deviation' => 'Desviación entre horas estimadas y registradas',
         'no_estimate' => 'Tarea sin estimación en un sprint activo', 'blocked' => 'Tarea bloqueada', 'dependency' => 'Dependencia en riesgo',
+        'over_agreed' => 'Tarea que superó el tiempo acordado', 'estimate_increase' => 'Ampliación importante de la estimación',
     ];
 
     /** Defaults of the configurable thresholds (Administración › Configuración › Monitoreo). */
@@ -66,11 +67,12 @@ final class Monitoring
         'escalate_l2_days' => 2,        // an alert not acknowledged after these days reaches the project managers
         'escalate_l3_days' => 3,        // a critical alert not acknowledged after these days reaches the administration
         'escalate_admin' => 1,          // 0 = never notify the administration
+        'estimate_increase_pct' => 25,  // 1.14: the worker's estimate is this % above the agreed one → review alert
     ];
     private const LIMITS = [
         'soon_days' => [0, 30], 'critical_priority' => [0, 100], 'critical_overdue_days' => [1, 365], 'deviation_pct' => [5, 1000], 'deviation_min_hours' => [0, 100],
         'load_available' => [1, 99], 'load_high' => [10, 300], 'load_over' => [50, 500], 'blocked_critical_days' => [0, 90],
-        'escalate_l2_days' => [0, 60], 'escalate_l3_days' => [0, 90], 'escalate_admin' => [0, 1],
+        'escalate_l2_days' => [0, 60], 'escalate_l3_days' => [0, 90], 'escalate_admin' => [0, 1], 'estimate_increase_pct' => [5, 500],
     ];
 
     // ------------------------------------------------------------------ settings
@@ -88,6 +90,7 @@ final class Monitoring
     {
         Policy::authorize('workspace.manage');
         $new = self::settings();
+        $old = $new;
         $errors = [];
         foreach (self::LIMITS as $k => [$min, $max]) {
             if (!array_key_exists($k, $input)) continue;
@@ -104,7 +107,9 @@ final class Monitoring
         $settings = json_decode((string)$db->value('SELECT settings FROM workspaces WHERE id = ?', [Policy::wsId()]), true) ?: [];
         $settings['monitoring'] = $new;
         $db->update('workspaces', ['settings' => json_encode($settings, JSON_UNESCAPED_UNICODE), 'updated_at' => now()], 'id = ?', [Policy::wsId()]);
-        Activity::log('settings', 'workspace', Policy::wsId(), 'Cambió los umbrales de monitoreo');
+        $changed = array_keys(array_filter($new, fn($v, $k) => ($old[$k] ?? null) !== $v, ARRAY_FILTER_USE_BOTH));
+        Activity::log('settings', 'workspace', Policy::wsId(), 'Cambió los umbrales de monitoreo', null, null, [], null,
+            ['before' => array_intersect_key($old, array_flip($changed)), 'after' => array_intersect_key($new, array_flip($changed)), 'category' => 'settings']);
         Policy::reset();
         return $new;
     }
@@ -728,6 +733,25 @@ final class Monitoring
             $out[] = ['key' => 'deviation:' . $t['id'], 'rule' => 'deviation', 'severity' => $dev['pct'] >= 2 * $cfg['deviation_pct'] ? 'warning' : 'info', 'level' => 1, 'project_id' => (int)$t['project_id'], 'task_id' => (int)$t['id'],
                 'message' => $key($t) . " «{$t['title']}»: " . self::fmtHours($dev['logged']) . ' registradas de ' . self::fmtHours($dev['estimate']) . ' estimadas (' . self::fmtHours($dev['hours'], true) . ", +{$dev['pct']} %)",
                 'explanation' => 'Las horas registradas superan la estimación en un ' . $dev['pct'] . ' % (umbral: ' . $cfg['deviation_pct'] . ' %). Una desviación no es un incumplimiento: sirve para revisar la estimación o el alcance' . ($t['category'] === 'done' ? '.' : ' del trabajo que queda.')];
+        }
+        // 1.14 · Tiempos: una tarea abierta ya consumió más horas que las acordadas (a quien gestiona el proyecto)
+        foreach ($db->all("SELECT t.id, t.number, t.title, t.project_id, t.estimate_hours, p.project_key,
+            (SELECT COALESCE(SUM(te.minutes), 0) FROM time_entries te WHERE te.task_id = t.id AND te.deleted_at IS NULL) AS m
+            $base AND t.estimate_hours > 0 HAVING m > t.estimate_hours * 60 LIMIT 2000", [$wsId]) as $t) {
+            $over = round((int)$t['m'] / 60 - (float)$t['estimate_hours'], 2);
+            $out[] = ['key' => 'over_agreed:' . $t['id'] . ':' . (float)$t['estimate_hours'], 'rule' => 'over_agreed', 'severity' => 'warning', 'level' => 2, 'project_id' => (int)$t['project_id'], 'task_id' => (int)$t['id'],
+                'message' => $key($t) . " «{$t['title']}» lleva " . self::fmtHours((int)$t['m'] / 60) . ' de ' . self::fmtHours((float)$t['estimate_hours']) . ' acordadas (' . self::fmtHours($over, true) . ') y sigue abierta',
+                'explanation' => 'Superó el tiempo acordado. No es una medida de rendimiento: puede ser una estimación corta, un bloqueo o trabajo nuevo. Revisa con su responsable si hay que acordar más horas, dividir la tarea o reprogramar.'];
+        }
+        // 1.14 · Tiempos: el trabajador pide bastante más tiempo del acordado (pendiente de revisión)
+        $inc = (int)($cfg['estimate_increase_pct'] ?? 25);
+        foreach ($db->all("SELECT t.id, t.number, t.title, t.project_id, t.estimate_hours, t.worker_estimate_hours, p.project_key $base AND t.estimate_review = 'pending'
+            AND t.estimate_hours > 0 AND t.worker_estimate_hours >= t.estimate_hours * ? LIMIT 2000", [$wsId, 1 + $inc / 100]) as $t) {
+            $pct = (int)round(((float)$t['worker_estimate_hours'] / (float)$t['estimate_hours'] - 1) * 100);
+            $out[] = ['key' => 'estimate_increase:' . $t['id'] . ':' . (float)$t['worker_estimate_hours'], 'rule' => 'estimate_increase', 'severity' => $pct >= 2 * $inc ? 'warning' : 'info', 'level' => 2,
+                'project_id' => (int)$t['project_id'], 'task_id' => (int)$t['id'],
+                'message' => $key($t) . " «{$t['title']}»: su responsable estima " . self::fmtHours((float)$t['worker_estimate_hours']) . ' y lo acordado es ' . self::fmtHours((float)$t['estimate_hours']) . " (+$pct %)",
+                'explanation' => "La nueva estimación supera lo acordado en un $pct % (umbral: $inc %). Ábrela para leer el motivo y acordar las horas: la carga y la capacidad siguen usando lo acordado hasta entonces."];
         }
         // Tiempos: sin estimación en un sprint activo (informativa)
         foreach ($db->all("SELECT t.id, t.number, t.title, t.project_id, t.sprint_id, p.project_key $base AND t.parent_id IS NULL AND t.estimate_hours IS NULL

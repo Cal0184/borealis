@@ -48,6 +48,7 @@
       <?= $num('critical_priority', 'Prioridad crítica desde el peso', 'Alta = 30, Urgente = 40') ?>
       <?= $num('deviation_pct', 'Desviación de horas', '% sobre lo estimado') ?>
       <?= $num('deviation_min_hours', 'Ignorar estimaciones menores de', 'h') ?>
+      <?= $num('estimate_increase_pct', 'Ampliación de estimación desde', '% sobre lo acordado') ?>
       <?= $num('blocked_critical_days', 'Bloqueo crítico tras', 'días bloqueada') ?>
       <?= $num('load_available', 'Capacidad disponible por debajo de', '%') ?>
       <?= $num('load_high', 'Carga equilibrada hasta', '%') ?>

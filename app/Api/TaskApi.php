@@ -23,7 +23,9 @@ final class TaskApi
 
     public function create(Request $r): Response
     {
-        $t = Tasks::create($r->intParam('id'), $r->input());
+        // 1.14: «Trabajos rápidos» from the «Nueva tarea» dialog (it makes sure the people can work there)
+        $quick = $r->param('id') === 'quick' || ((int)$r->param('id') > 0 && (\Borealis\Services\Projects::find($r->intParam('id'))['kind'] ?? 'standard') === 'quick');
+        $t = $quick ? \Borealis\Services\QuickWork::create($r->input()) : Tasks::create($r->intParam('id'), $r->input());
         return Response::ok(['task' => $this->dto($t)] + $this->celebration($t, null), 'Tarea creada: ' . $t['task_key']);
     }
 
@@ -87,6 +89,21 @@ final class TaskApi
     }
 
     /** 1.12: explanation of a delay or a deviation (reason, comment, corrective action). */
+    /** 1.14: the responsible person's estimate, with its reason. */
+    public function proposeEstimate(Request $r): Response
+    {
+        $t = \Borealis\Services\TaskEstimates::propose($r->intParam('id'), $r->input());
+        return Response::ok(['task' => ['id' => (int)$t['id'], 'estimate_hours' => $t['estimate_hours'], 'worker_estimate_hours' => $t['worker_estimate_hours'], 'estimate_review' => $t['estimate_review']]],
+            $t['estimate_review'] === 'pending' ? 'Estimación enviada para revisión' : 'Estimación guardada');
+    }
+
+    /** 1.14: the manager agrees on the hours of a task. */
+    public function agreeEstimate(Request $r): Response
+    {
+        $t = \Borealis\Services\TaskEstimates::agree($r->intParam('id'), $r->input());
+        return Response::ok(['task' => ['id' => (int)$t['id'], 'estimate_hours' => $t['estimate_hours'], 'estimate_review' => $t['estimate_review']]], 'Horas acordadas');
+    }
+
     public function explain(Request $r): Response
     {
         $id = \Borealis\Services\Monitoring::explain($r->intParam('id'), $r->input());
