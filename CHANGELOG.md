@@ -1,5 +1,59 @@
 # Cambios
 
+## 1.14.0 (24/11/2026)
+
+**Gestión, monitoreo y trazabilidad.** El detalle de lo que se hizo, lo que no y por qué está en `docs/INFORME-1.14.md`. La configuración de la tarea programada está en `docs/CONFIGURACION-1.14.md`.
+
+**Notificaciones con Borealis cerrado.** Causa encontrada: los recordatorios dependían de un cron que en la práctica no corría o fallaba en silencio. Se recomendaba `>/dev/null` y en HestiaCP `php` puede ser otra versión. Además se sumaban tres errores:
+- la preferencia oculta «push» quedaba apagada para muchas personas;
+- un fallo pasajero del servicio del navegador perdía el aviso;
+- nadie veía si el cron funcionaba.
+
+Las sesiones no eran la causa: el aviso cifrado ya lleva su contenido. Cambios:
+- **Tarea programada (`Scheduler`):** la usan `bin/notify.php`, la dirección nueva `/cron/run?token=…` (para alojamientos que solo llaman a una URL) y un respaldo tras cualquier visita con PHP-FPM. Cada ejecución queda registrada en `system_jobs`. Administración › Notificaciones, nueva, dice si funciona, da el comando exacto para HestiaCP y muestra los envíos fallidos. El perfil avisa si no corre.
+- **Registro por dispositivo:** cada aviso enviado a cada dispositivo queda en `notification_deliveries`, una sola vez. Los errores pasajeros se reintentan a los 5, 15, 60 y 180 minutos. Los permanentes quedan anotados con su motivo (por ejemplo, VAPID). No se reintenta lo leído, lo completado ni lo de hace más de 24 h.
+- **Preferencias:** el envío al dispositivo viene activado para las personas nuevas, y activar un dispositivo lo enciende. La migración lo repara para quien tenía un dispositivo con la preferencia apagada. Se respeta a quien lo apague después.
+- **Renovación y permiso:** el service worker renueva la suscripción cuando el navegador la cambia (`pushsubscriptionchange`). El inicio propone dar permiso al navegador una vez.
+
+**Registro de actividad y auditoría.**
+- **Qué guarda:** cada cambio registra categoría, antes, después, motivo y origen (web, Google, sistema).
+- **Integridad:** la cadena de huellas por espacio detecta modificaciones y eliminaciones hechas fuera de Borealis («Comprobar integridad»).
+- **Consulta:** filtros por persona, proyecto, categoría, acción y período (semana, mes, trimestre, año), y exportación CSV.
+- **Datos sensibles:** contraseñas, tokens, claves y datos de dispositivos se ocultan antes de guardarse. No hay forma de editar ni borrar registros desde Borealis.
+- **Historial del calendario:** creación, cambio de fecha, reprogramación, participantes, cancelación y restauración de eventos, cambios de fecha de tareas con motivo, sincronización de Google y nueva planificación original, con antes y después.
+
+**Estimaciones del trabajador.**
+- **Cinco cifras por tarea:** administración, trabajador, acordado, real y diferencia. «Acordado» es el `estimate_hours` de siempre, así que capacidad, sprints, Monitoreo y Análisis no cambian de fuente.
+- **Cambio con motivo:** quien es responsable cambia la estimación con un motivo. Queda «por revisar» y se avisa a quien gestiona el proyecto, que acuerda el valor.
+- **Historial:** cada paso queda en `task_estimates` y en la auditoría.
+
+**Desvíos (Monitoreo).** Hay dos reglas nuevas, de nivel 2 para quien gestiona:
+- «superó el tiempo acordado»;
+- «ampliación importante de la estimación», con un umbral configurable que por defecto es 25 %.
+
+Se suman a vencidas, capacidad agotada con trabajo pendiente (el caso de las 15 h), dependencias y sobrecarga. Los textos describen la situación; no califican a la persona.
+
+**Trabajos rápidos.** Nueva página semanal para urgencias, solicitudes, tareas administrativas y trabajo de la semana sin proyecto. Son tareas normales de un espacio especial que no aparece entre los proyectos: se asignan, registran horas y cuentan en la carga, Mi trabajo, el calendario, Monitoreo y Análisis. El formulario se queda abierto para añadir varios seguidos.
+
+**Crear proyectos y tareas más rápido.**
+- **Nuevo proyecto:** basta el nombre. Responsable, entrega («Esta semana» / «Este mes») e integrantes están a la vista, y el objetivo y lo demás en «Más opciones».
+- **Nueva tarea:** «Crear y añadir otra», «Trabajos rápidos (sin proyecto)», la carga de la semana del responsable al elegirlo, inicio, hito e imprevista.
+- **A quién se ve:** solo se listan las personas con las que se comparte algún proyecto (la administración ve a todas).
+
+**Carta Gantt** (módulo de proyecto activado por defecto).
+- **Contenido:** tareas y subtareas, responsables, dependencias (marca las que están en conflicto), hitos, sprints, avance, retrasos, reprogramaciones, y el plan original frente al actual.
+- **Uso:** escalas por días, semanas y meses. Se arma sola en cada visita. Quien gestiona puede fijar la planificación actual como la original, y queda registrado.
+
+**Análisis por período.**
+- **Períodos:** semana, mes, trimestre, año y 12 meses.
+- **Filtro por persona:** solo para la administración o para quien gestiona personas.
+- **Tarjeta «¿Qué ocurrió en el período?»:** proyectos iniciados y finalizados; trabajos creados, finalizados, pendientes y vencidos; horas registradas, imprevistas y en trabajos rápidos; acordado frente a real; horas por proyecto.
+
+**Base de datos:** migración `016_v114`.
+- **Qué añade:** 4 tablas, columnas nuevas e índices.
+- **Datos que rellena:** copia la estimación existente a «administración» y toma la planificación original de la primera fecha registrada.
+- **Qué conserva y si se repite:** no borra nada y se puede repetir.
+
 ## 1.13.0 (17/11/2026)
 
 **Análisis y decisiones** a partir del «Prompt maestro — Fase C». El prompt pedía 1.7.0, pero esa versión ya existe; por eso es la **1.13.0**, la siguiente a 1.12.0. Se revisó contra el código (detalle en `docs/INFORME-1.13.md`). Se reutilizan Monitoreo (carga, puntualidad, alertas, umbrales), la capacidad semanal y por sprint, el compromiso de sprint guardado desde 1.12, el historial de fechas límite y el historial de actividad para los bloqueos.

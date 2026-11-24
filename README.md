@@ -168,7 +168,11 @@ Cómo funciona:
 - HTTPS con certificado válido (Let's Encrypt de HestiaCP sirve). Extensiones `openssl` (con curvas EC) y `curl` de PHP; el servidor debe poder salir por HTTPS a los servicios de notificaciones de los navegadores (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.notify.windows.com`).
 - Android: Chrome, Edge o Firefox. iPhone/iPad: iOS/iPadOS 16.4 o posterior y abrir Borealis **desde el icono de la pantalla de inicio** (Safari › Compartir › Añadir a pantalla de inicio); en Safari normal iOS no ofrece notificaciones.
 - Opcional en `config/config.php`: `'push' => ['subject' => 'mailto:tu-correo@dominio']` (contacto que ven los servicios de notificaciones; si no, se usa `mail.from`).
-- **Cron** para que lleguen los recordatorios aunque nadie tenga Borealis abierto. HestiaCP › Cron Jobs › Add Cron Job, cada 5 minutos (`*/5`): `cd /home/USUARIO/web/DOMINIO/public_html/borealis && php bin/notify.php >/dev/null 2>&1`. Desde 1.9 también envía los correos y pone al día Google Calendar.
+- **Tarea programada** para que lleguen los recordatorios aunque nadie tenga Borealis abierto. HestiaCP › Cron Jobs › Add Cron Job, cada 5 minutos (`*/5`): `cd /home/USUARIO/web/DOMINIO/public_html/borealis && /usr/bin/php8.2 bin/notify.php >> storage/logs/notify.log 2>&1`. Usa la misma versión de PHP que el sitio.
+  - Desde la 1.9 también envía los correos y pone al día Google Calendar.
+  - Desde la 1.14, Administración › Notificaciones dice si funciona. Ahí también está la dirección `/cron/run?token=…`, para alojamientos que solo llaman a una URL.
+  - Con PHP-FPM, una visita cualquiera también la ejecuta, como respaldo.
+  - Detalle en `docs/CONFIGURACION-1.14.md`.
 
 **Correo (1.9, opcional).** Sección `mail` de `config/config.php` con un buzón de tu dominio (SMTP 587/STARTTLS o 465/SSL), o `mail()` del servidor. Pasos para HestiaCP y prueba: `docs/CONFIGURACION-1.9.md` › Correo.
 - Si se borra `storage/vapid.json` o `storage/app.key`, los dispositivos tienen que volver a activar las notificaciones.
@@ -207,6 +211,30 @@ Lo que se probó sin servicios reales: las pruebas usan un servidor local que im
    - desde consola: `php bin/migrate.php` (también crea la copia; `--status` solo informa).
 
 Las migraciones nunca eliminan datos de usuario.
+
+### De 1.13.0 a 1.14.0
+
+1. Copia de seguridad.
+2. Sustituye los archivos conservando `config/config.php` y `storage/`.
+3. Aplica la migración `016_v114` (Administración › Datos › Actualizar base de datos, o `php bin/migrate.php`).
+   - **Tablas nuevas:** `system_jobs`, `notification_deliveries`, `task_estimates` y `audit_chain`.
+   - **Columnas nuevas:** en `tasks`, `projects` y `activity`.
+   - **Datos que rellena:** copia la estimación actual como «estimación de administración», toma la planificación original de la primera fecha registrada y enciende el envío al móvil a quien tenía un dispositivo activado con la preferencia apagada.
+   - **Conserva y se repite:** no borra nada y se puede repetir.
+4. **Revisa la tarea programada.** Es la causa de que los avisos no llegaran con Borealis cerrado.
+   - En Administración › Notificaciones está el estado y el comando exacto para HestiaCP. Lleva la versión de PHP del sitio y guarda los errores en `storage/logs/notify.log`, no en `/dev/null`.
+   - Si el alojamiento solo permite llamar a una URL, usa la dirección `/cron/run?token=…` que aparece ahí.
+   - Detalle en `docs/CONFIGURACION-1.14.md`.
+5. **Opcional:** Administración › Ajustes › «Ampliación de estimación desde» (25 % por defecto).
+
+**Volver a 1.13.0 (reversión):**
+1. Restaura los archivos de 1.13.0 conservando `config/config.php` y `storage/`.
+2. La 1.13 funciona con las tablas y columnas de la 1.14 presentes, con dos diferencias:
+   - el espacio «Trabajos rápidos» aparece como un proyecto más;
+   - lo que se registre mientras tanto queda sin encadenar, y al volver a la 1.14 «Comprobar integridad» lo señala.
+
+   Para quitarlas del todo, restaura la copia previa a la actualización.
+3. No elimines solo las columnas de `activity`: se perdería el antes y el después registrado desde la 1.14.
 
 ### De 1.12.0 a 1.13.0
 
@@ -336,7 +364,8 @@ Se importan personas (unificadas por correo), equipos, proyectos con sus estados
 | El instalador dice que la base ya tiene datos | Protección contra sobrescritura: usa una base vacía o restaura `config/config.php`. |
 | Tras actualizar, algo se comporta como en la versión anterior (por ejemplo, el tutorial) | El navegador usa archivos `.js` viejos guardados en caché (Nginx de HestiaCP los marca con `expires max`). Desde 1.7.1 no debería pasar; si pasa, recarga con Ctrl+F5. Para regenerar las versiones tras editar JavaScript: `php bin/stamp-assets.php`. |
 | «Activar en este dispositivo» no aparece o falla | Hace falta HTTPS. En iPhone/iPad, abre Borealis desde el icono de la pantalla de inicio (iOS 16.4+). Si el permiso se denegó, se cambia en los ajustes del navegador para el sitio. |
-| Los avisos al móvil llegan solo cuando alguien abre Borealis | Falta el cron de `php bin/notify.php`. |
+| Los avisos al móvil llegan solo cuando alguien abre Borealis | La tarea programada no corre. Administración › Notificaciones dice desde cuándo y muestra el último error. Revisa que el comando use la versión de PHP del sitio (`/usr/bin/php8.2`, no `php`) y mira `storage/logs/notify.log`. Si el alojamiento solo permite URLs, usa `/cron/run?token=…`. |
+| Un dispositivo dejó de recibir avisos | Administración › Notificaciones › Envíos muestra el motivo. Un 401/403 indica un problema con las claves VAPID (¿se borró `storage/vapid.json`?). Quien tenga el problema puede volver a pulsar «Activar en este dispositivo». |
 | Discord o GitHub muestran un error en «Todo a mano» | El mensaje dice la causa (webhook eliminado, token caducado, límite de consultas, sin conexión). El resto de Borealis no se ve afectado. |
 | Olvidé la contraseña de administración | Otra cuenta con permiso «Gestionar personas» puede restablecerla en Administración › Personas. |
 

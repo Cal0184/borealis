@@ -1,4 +1,4 @@
-# Estado de funciones — Borealis 1.13.0
+# Estado de funciones — Borealis 1.14.0
 
 **Criterio:** una función aparece como *Implementado y probado* solo si una prueba automatizada la ejerció de verdad y pasó (ver [PRUEBAS.md](PRUEBAS.md)). Que su pantalla abra sin errores no cuenta como probarla. Lo que solo se revisó leyendo el código aparece como *pendiente de prueba*.
 
@@ -8,6 +8,35 @@
 | 🟡 Implementado, pendiente de prueba | Existe y su pantalla carga, pero ninguna prueba ejercita su comportamiento |
 | 🔧 En desarrollo | Parcial |
 | ⏳ Pendiente | No incluido todavía |
+
+## Novedades de 1.14
+
+| Función | Estado | Notas |
+|---|---|---|
+| Tarea programada por consola (`bin/notify.php`) con registro de cada ejecución | ✅ | Integración «1.14 · Tarea programada» |
+| Dirección `/cron/run?token=…`: clave, 403, cabecera, sin sesión, cambio de clave, sin repetir en menos de 1 minuto | ✅ | Integración |
+| Respaldo por visitas (tras responder, cada 5 minutos como mucho) | ✅ | Probado con `web_fallback => 'always'` en el servidor integrado; el camino de PHP-FPM (`fastcgi_finish_request`) no se probó con un PHP-FPM real |
+| Administración › Notificaciones: estado, comando para HestiaCP y envíos fallidos; aviso en el perfil | ✅ | Integración y navegador |
+| Registro por aviso y dispositivo, reintentos de errores pasajeros, error permanente sin reintento, sin duplicados | ✅ | Contra el servicio simulado (`/push/flaky`, `/push/badauth`) |
+| Aviso leído o tarea completada mientras espera el reintento: no se envía | ✅ | Integración |
+| Renovación de la suscripción (`pushsubscriptionchange`) sin sesión, probando la anterior | ✅ | API en integración; el evento del navegador no se puede provocar en Chromium automatizado |
+| Envío al dispositivo activado por defecto, respetando a quien lo apaga; reparación en la migración | ✅ | Integración y actualización desde 1.13 |
+| Propuesta de permiso en el inicio | 🟡 | Se comprueba que aparece; el permiso real del navegador no se concede en las pruebas |
+| Registro de actividad con categoría, antes, después, motivo y origen | ✅ | Integración |
+| Filtros por persona, proyecto, categoría, acción y período; CSV | ✅ | Integración y navegador |
+| Integridad: modificación, eliminación y huella borrada detectadas | ✅ | Integración |
+| Sin contraseñas, tokens, claves ni datos de dispositivos en el registro | ✅ | Integración |
+| Historial del calendario (eventos y fechas de tareas con motivo) | ✅ | Integración |
+| Historial de la sincronización con Google (cuántos cambios) | 🟡 | Solo revisado en el código |
+| Estimaciones: administración, trabajador, acordado, real y diferencia; motivo obligatorio; revisión y acuerdo; historial | ✅ | Integración y navegador |
+| Alertas «superó el tiempo acordado» y «ampliación importante de la estimación» | ✅ | Integración |
+| Trabajos rápidos: crear seguidos, asignar, horas, carga, permisos, sin aparecer entre los proyectos | ✅ | Integración y navegador |
+| Carga de la semana al elegir responsable | ✅ | Integración (API) y navegador |
+| «Crear y añadir otra» en «Nueva tarea» | ✅ | Navegador |
+| Nuevo proyecto con responsable, entrega, integrantes y objetivo | ✅ | Integración y navegador |
+| Carta Gantt: tareas, subtareas, hitos, dependencias, retrasos, plan original y actual, escalas, línea base, permisos | ✅ | Integración y navegador (también en el móvil) |
+| Análisis por semana, mes, trimestre y año, filtro por persona, «¿Qué ocurrió en el período?» | ✅ | Integración y navegador |
+| Actualización 1.13 → 1.14 (estimaciones, plan original, preferencias) | ✅ | Integración (migración 016 vuelta a aplicar sobre datos) |
 
 ## Novedades de 1.13
 
