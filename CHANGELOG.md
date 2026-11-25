@@ -1,5 +1,21 @@
 # Cambios
 
+## 1.16.2 (25/11/2026)
+
+**Correo sin editar archivos por FTP.** Hasta ahora, activar los correos exigía editar la sección `mail` de `config/config.php`, y sin SSH eso significa descargar el archivo, modificarlo y volver a subirlo.
+
+**Configuración desde Administración › Datos › Correo:**
+- **Formulario:** proveedor (buzón del dominio, Gmail, Microsoft 365, Zoho, Brevo), servidor, puerto, usuario, contraseña y remitente.
+- **Contraseña:** se guarda cifrada en `storage/mail.json` y nunca se muestra.
+- **Prueba:** «Guardar y probar» envía al instante un correo de prueba y dice el motivo si no sale.
+- **Estado:** se ve el último envío correcto y el último error.
+- **Desactivar:** se puede desde la misma pantalla.
+- **Compatibilidad:** una sección `mail` en `config/config.php` sigue teniendo prioridad.
+
+**Envío al instante.** Asignaciones, cambios, comentarios y alertas salen por correo en el momento en que ocurren, no solo cuando corre la tarea programada (antes, además, había una espera de 2 minutos). Los recordatorios por hora siguen saliendo con la tarea programada, y nada se envía dos veces.
+
+**Todas las categorías por correo por defecto.** Antes solo estaban activadas las asignaciones, los vencimientos, los sprints y la capacidad. Quien tenía las preferencias antiguas sin cambiar pasa a las nuevas. Cada persona puede apagar lo que no quiera en Perfil › Notificaciones.
+
 ## 1.16.1 (25/11/2026)
 
 Sin migraciones. Va en el mismo PR que la 1.16.0.

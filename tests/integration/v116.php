@@ -146,3 +146,57 @@ check('La invitación a activar las notificaciones aparece en cualquier página,
 check('Los avisos dentro de la página se ven encima de una confirmación abierta (capa superior del navegador)', str_contains($admin->body, 'id="toasts" role="status" aria-live="polite" popover="manual"') && str_contains($read('public/assets/js/core.js'), 'raiseToasts(box)') && str_contains($read('public/assets/css/borealis.css'), '.toasts[popover]:not(:popover-open)'));
 $admin->get('/admin/notifications');
 check('Administración explica qué funciona sin acceso al servidor y cómo usar un servicio externo gratuito con la dirección secreta', $admin->status === 200 && str_contains($admin->body, 'data-layers') && str_contains($admin->body, 'cron-job.org') && str_contains($admin->body, 'data-server-mode') && preg_match('~data-cron-url>[^<]+/cron/run\?token=~', $admin->body), snippet($admin));
+
+// 1.16.2 · e-mail configured from Administración (no config.php by FTP), sent at once, defaults on
+group('1.16.2 · Correo configurado desde Administración');
+$admin->get('/admin/data');
+check('Administración › Datos › Correo tiene un formulario (sin editar config/config.php por FTP)', $admin->status === 200 && str_contains($admin->body, 'data-api="/api/mail/settings"') && str_contains($admin->body, 'data-mail-preset') && str_contains($admin->body, 'smtp.gmail.com'), snippet($admin));
+$anonMail = new Client($BASE);
+$anonMail->api('POST', '/api/mail/settings', ['transport' => 'smtp']);
+$valMail = new Client($BASE);
+check('Sin sesión no se puede tocar (401/419)', in_array($anonMail->status, [401, 403, 419], true), (string)$anonMail->status);
+$admin->api('POST', '/api/mail/settings', ['transport' => 'smtp', 'host' => '', 'port' => 465, 'from_address' => 'no-es-correo']);
+check('Valida servidor y remitente', $admin->status === 422 && isset($admin->json()['errors']['from_address']), snippet($admin));
+$admin->api('POST', '/api/mail/settings', ['transport' => 'smtp', 'host' => '127.0.0.1', 'port' => 465, 'username' => 'avisos@example.test', 'password' => 'clave-smtp-de-prueba', 'from_address' => 'avisos@example.test', 'from_name' => 'Borealis Avisos']);
+$mj = json_decode((string)@file_get_contents($root . '/storage/mail.json'), true) ?: [];
+check('Guarda y prueba al instante: si el servidor no responde lo dice con el motivo', $admin->status === 409 && str_contains((string)($admin->json()['error'] ?? $admin->body), 'no salió'), snippet($admin));
+check('La contraseña queda cifrada en storage/mail.json (nunca en claro)', ($mj['host'] ?? '') === '127.0.0.1' && !str_contains((string)json_encode($mj), 'clave-smtp-de-prueba') && !empty($mj['password']), json_encode(array_keys($mj)));
+$admin->get('/admin/data');
+check('…el error queda a la vista en Administración y la contraseña no se muestra', str_contains($admin->body, 'Último error') && !str_contains($admin->body, 'clave-smtp-de-prueba'), snippet($admin));
+
+// a working SMTP (the stand-in of the test-suite, with its own certificate)
+$cert16 = sys_get_temp_dir() . '/borealis-smtp16-' . getmypid() . '.pem';
+$pk16 = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+$crt16 = openssl_csr_sign(openssl_csr_new(['commonName' => 'localhost'], $pk16), null, $pk16, 2);
+openssl_x509_export($crt16, $crtPem16); openssl_pkey_export($pk16, $keyPem16);
+file_put_contents($cert16, $crtPem16 . $keyPem16);
+file_put_contents($cert16 . '.crt', $crtPem16);
+$smtp16Port = (int)(getenv('BOREALIS_FAKE_SMTP16_PORT') ?: 2536);
+$smtp16Log = sys_get_temp_dir() . '/borealis-smtp16-' . getmypid() . '.jsonl';
+@unlink($smtp16Log);
+$smtp16 = proc_open([PHP_BINARY, $root . '/tests/fake-services/smtp.php', (string)$smtp16Port], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $sp16, null,
+    ['FAKE_SMTP_LOG' => $smtp16Log, 'FAKE_SMTP_CERT' => $cert16, 'FAKE_SMTP_USER' => 'avisos@example.test', 'FAKE_SMTP_PASS' => 'clave-smtp-de-prueba', 'FAKE_SMTP_DOWN_FILE' => $smtp16Log . '.down', 'PATH' => getenv('PATH')]);
+$mails16 = fn() => array_values(array_filter(array_map(fn($l) => json_decode($l, true), is_file($smtp16Log) ? file($smtp16Log, FILE_IGNORE_NEW_LINES) : [])));
+usleep(500000);
+// the stand-in listens on a test port and signs with its own certificate: only the tests set these two
+$mj['host'] = 'localhost'; $mj['port'] = $smtp16Port; $mj['encryption'] = 'tls'; $mj['cafile'] = $cert16 . '.crt';
+file_put_contents($root . '/storage/mail.json', json_encode($mj));
+$admin->api('POST', '/api/mail/test');
+$m1 = $mails16();
+check('Con un servidor que funciona, el correo de prueba sale con la contraseña guardada', $admin->status === 200 && count($m1) === 1 && str_contains((string)($m1[0]['text'] ?? json_encode($m1[0])), 'correo de prueba'), snippet($admin) . ' ' . count($m1));
+$admin->api('POST', "/api/projects/$pS/tasks", ['title' => 'Asignada con correo al instante', 'assignee_id' => $val]);
+usleep(1500000);
+$toVal = array_filter($mails16(), fn($m) => str_contains((string)json_encode($m, JSON_UNESCAPED_UNICODE), 'Asignada con correo al instante'));
+check('La asignación llega por correo al instante, sin esperar la tarea programada', count($toVal) === 1, (string)count($mails16()));
+exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/notify.php') . ' 2>&1');
+check('…y la tarea programada no la repite', count(array_filter($mails16(), fn($m) => str_contains((string)json_encode($m, JSON_UNESCAPED_UNICODE), 'Asignada con correo al instante'))) === 1);
+$admin->get('/admin/data');
+check('Administración muestra el último envío correcto', str_contains($admin->body, 'Último envío correcto'), snippet($admin));
+$q("UPDATE users SET prefs = ? WHERE id = ?", [json_encode(['notify' => ['v' => 116, 'email' => true, 'email_off' => ['automation', 'calendar', 'comments', 'date', 'monitor', 'project', 'watching']]]), $val]);
+$admin->api('PATCH', "/api/tasks/" . (int)$q("SELECT id FROM tasks WHERE title = 'Asignada con correo al instante'")->fetchColumn(), ['due_date' => $day(6)]);
+usleep(1500000);
+check('Las categorías por correo vienen activadas: un cambio de fecha también llega (también a quien tenía las de antes sin cambiar)', count(array_filter($mails16(), fn($m) => str_contains((string)json_encode($m, JSON_UNESCAPED_UNICODE), 'fecha de entrega'))) >= 1, (string)count($mails16()));
+$admin->api('POST', '/api/mail/settings', ['transport' => 'none']);
+check('Se puede desactivar el correo desde la misma pantalla', $admin->status === 200 && !is_file($root . '/storage/mail.json'), snippet($admin));
+proc_terminate($smtp16);
+@unlink($smtp16Log); @unlink($cert16); @unlink($cert16 . '.crt'); @unlink($root . '/storage/mail-status.json');

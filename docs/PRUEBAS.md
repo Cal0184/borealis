@@ -1,13 +1,26 @@
-# Resultados de pruebas — Borealis 1.16.1
+# Resultados de pruebas — Borealis 1.16.2
 
 Resultados **reales**, generados por las propias pruebas el 25/11/2026. La integración se ejecutó instalando desde el ZIP; el navegador, desde una copia idéntica a él (`git ls-files`). Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1151 | 0 | 1151 |
+| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1163 | 0 | 1163 |
 | Navegador Chromium (`tests/e2e/run.mjs`) | 336 | 0 | 336 |
 | Motor sin cron con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 14 | 0 | 14 |
 | Motor sin cron con Apache + mod_php reales (`SERVER=apache tests/fpm/engine.sh`) | 15 | 0 | 15 |
+
+**Novedades 1.16.2:** 12 comprobaciones nuevas en integración, en el grupo «1.16.2 · Correo configurado desde Administración»:
+- **Formulario y permisos:** el formulario existe, no se puede usar sin sesión y valida los datos.
+- **Errores visibles:** si el servidor no responde, lo dice con el motivo.
+- **Contraseña:** queda cifrada y nunca se muestra.
+- **Envío real con un SMTP de prueba:** con TLS y la contraseña guardada.
+- **Al instante:** la asignación sale por correo sin esperar la tarea programada, y la tarea programada no la repite.
+- **Categorías por defecto:** un cambio de fecha también llega, incluso a quien tenía las preferencias antiguas sin cambiar.
+- **Desactivar:** se puede desde la misma pantalla.
+
+**Prueba antigua ajustada (v19):** el correo de los avisos ya no lo envía la tarea programada sino la propia petición, así que la prueba espera a que llegue. En la primera ejecución fallaba precisamente por eso: el correo ya había salido antes de la tarea.
+
+**Navegador:** 336/336 con la 1.16.2.
 
 **Novedades 1.16.1:** 8 comprobaciones nuevas en integración, en el grupo «1.16.1 · …»:
 - **Asignación:** va con sonido y se queda en pantalla.

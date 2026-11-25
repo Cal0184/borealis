@@ -293,10 +293,12 @@ $readOne = (int)$q("SELECT id FROM notifications WHERE user_id = ? AND type = 'd
 $q('UPDATE notifications SET read_at = UTC_TIMESTAMP() WHERE id = ?', [$readOne]);
 $q("UPDATE notifications SET emailed_at = NULL, created_at = UTC_TIMESTAMP() WHERE user_id = ?", [$hugo]);
 $admin->api('POST', "/api/projects/$p19/tasks", ['title' => 'Nueva para el correo', 'assignee_id' => $hugo]);
+// 1.16.2: the e-mail now goes out right after that request (not only with the cron): wait for it
+for ($w = 0; $w < 80 && !array_filter($mails(), fn($x) => in_array('hugo.hora@example.test', $x['to'], true)); $w++) usleep(500000);
 [$cm1, $om1] = $cron();
 $m = $mails();
 $mh = array_values(array_filter($m, fn($x) => in_array('hugo.hora@example.test', $x['to'], true)));
-check('El cron envía los avisos por SMTP autenticado y cifrado (STARTTLS), con certificado verificado', $cm1 === 0 && $mh && $mh[0]['tls'] === true && ($mh[0]['auth']['user'] ?? '') === 'avisos@example.test' && ($mh[0]['auth']['tls'] ?? false) === true, $om1 . ' ' . json_encode($m));
+check('Los avisos salen por SMTP autenticado y cifrado (STARTTLS), con certificado verificado (1.16.2: al instante, sin esperar el cron)', $cm1 === 0 && $mh && $mh[0]['tls'] === true && ($mh[0]['auth']['user'] ?? '') === 'avisos@example.test' && ($mh[0]['auth']['tls'] ?? false) === true, $om1 . ' ' . json_encode($m));
 check('Varios avisos juntos llegan en un solo correo, cada uno con su enlace directo', count($mh) === 1 && preg_match('/\d+ avisos nuevos/', (string)($mh[0]['subject'] ?? '')) && str_contains((string)$mh[0]['text'], 'Nueva para el correo') && str_contains((string)$mh[0]['text'], $BASE . '/t/NUE-'), json_encode($mh[0] ?? null));
 check('Un recordatorio de una hora que cambió ya no se envía por correo (sí el de la hora nueva)', $oldN && $newN && !str_contains((string)($mh[0]['text'] ?? ''), (string)$oldN['message']) && str_contains((string)($mh[0]['text'] ?? ''), (string)$newN['message']), (string)($mh[0]['text'] ?? ''));
 check('Lo ya leído en Borealis no se envía por correo', !str_contains((string)($mh[0]['text'] ?? ''), (string)$q('SELECT message FROM notifications WHERE id = ?', [$readOne])->fetchColumn()));

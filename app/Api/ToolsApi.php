@@ -28,7 +28,7 @@ final class ToolsApi
     public function mailTest(Request $r): Response
     {
         if (!\Borealis\Security\AccountPolicy::isInstanceAdmin()) throw HttpException::forbidden('Solo la administración de la instalación puede probar el correo.');
-        if (!Mailer::configured()) throw HttpException::conflict('El correo no está configurado: añade la sección «mail» en config/config.php (README › Correo).');
+        if (!Mailer::configured()) throw HttpException::conflict('El correo no está configurado: complétalo en Administración › Datos › Correo.');
         $to = (string)Auth::user()['email'];
         try {
             Mailer::send($to, 'Borealis · correo de prueba', "Hola,\n\nEste es un correo de prueba de Borealis. Si lo recibes, los avisos por correo funcionan.\n\n" . absolute_url('/'));
@@ -36,6 +36,21 @@ final class ToolsApi
             throw HttpException::conflict('No se pudo enviar: ' . $e->getMessage());
         }
         return Response::ok([], "Correo de prueba enviado a $to. Revisa la bandeja de entrada (y la de spam).");
+    }
+
+    /** 1.16.2: Administración › Datos › Correo, saved without editing config/config.php; sends a test at once. */
+    public function mailSave(Request $r): Response
+    {
+        if (!\Borealis\Security\AccountPolicy::isInstanceAdmin()) throw HttpException::forbidden('Solo la administración de la instalación puede configurar el correo.');
+        \Borealis\Services\MailSettings::save($r->input());
+        if (!Mailer::configured()) return Response::ok([], 'Correo desactivado.');
+        $to = (string)Auth::user()['email'];
+        try {
+            Mailer::send($to, 'Borealis · correo de prueba', "Hola,\n\nEste es un correo de prueba de Borealis. Si lo recibes, los avisos por correo funcionan.\n\n" . absolute_url('/'));
+        } catch (\RuntimeException $e) {
+            throw HttpException::conflict('Se guardó, pero el correo de prueba no salió: ' . $e->getMessage());
+        }
+        return Response::ok([], "Guardado. Correo de prueba enviado a $to: revisa la bandeja de entrada (y la de spam).");
     }
 
     public function pushKey(Request $r): Response

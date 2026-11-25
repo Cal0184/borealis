@@ -1,7 +1,7 @@
 // Mobile and desktop notifications (1.8) with the browser's standard Web Push.
 // Registers the service worker (sw.js, needed also to install Borealis on the Home Screen),
 // asks for permission only when the person presses «Activar», and keeps the server informed.
-import { api, basePath, onInit, toast } from './core.js?v=1.16.1';
+import { api, basePath, onInit, toast } from './core.js?v=1.16.2';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -197,4 +197,21 @@ onInit((root) => {
     paintInstall(box);
     if (outcome === 'accepted') toast('Borealis se instaló en este dispositivo');
   });
+});
+
+// 1.16.2 · Administración › Correo: a provider fills server, port and encryption
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest?.('[data-mail-preset]');
+  if (!sel) return;
+  const o = sel.selectedOptions[0];
+  const form = sel.closest('form');
+  if (!o?.value || !form) return;
+  if (o.dataset.host) form.elements.host.value = o.dataset.host;
+  form.elements.port.value = o.dataset.port;
+  const enc = form.querySelector('[data-mail-enc]');
+  if (enc) enc.value = o.dataset.enc;
+  form.elements.transport.value = 'smtp';
+});
+document.addEventListener('change', (e) => {
+  if (e.target.matches?.('.mail-form [name="port"]')) { const enc = e.target.form.querySelector('[data-mail-enc]'); if (enc) enc.value = e.target.value === '465' ? 'ssl' : 'tls'; }
 });

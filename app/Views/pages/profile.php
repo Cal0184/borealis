@@ -103,7 +103,7 @@
         <div class="push-box" data-mail-box>
           <h3 class="small-title"><?= icon('mail', 'sm') ?> Por correo</h3>
           <label class="check"><input type="checkbox" name="email" value="1"<?= checked($np['email']) ?>> <span>Enviarme los avisos importantes a <strong style="overflow-wrap:anywhere"><?= e((string)($me['email'] ?? '')) ?></strong></span></label>
-          <p class="small muted" data-mail-status><?= !$mailOk ? 'Esta instalación todavía no puede enviar correos: la administración debe configurarlo. Mientras tanto no se envía ninguno.' : (!$myMail ? 'Tu dirección de correo no es válida; cámbiala en Datos personales para recibirlos.' : 'Si hay varios avisos juntos llegan en un solo correo. No se envía lo que ya leíste en Borealis.') ?></p>
+          <p class="small muted" data-mail-status><?= !$mailOk ? 'Esta instalación todavía no puede enviar correos: la administración debe configurarlo' . (\Borealis\Security\AccountPolicy::isInstanceAdmin() ? ' en <a href="' . e(url('/admin/data')) . '#correo">Administración › Datos › Correo</a>' : '') . '. Mientras tanto no se envía ninguno.' : (!$myMail ? 'Tu dirección de correo no es válida; cámbiala en Datos personales para recibirlos.' : 'Si hay varios avisos juntos llegan en un solo correo. No se envía lo que ya leíste en Borealis.') ?></p>
           <details class="more-options"><summary><?= icon('settings', 'sm') ?> Qué avisos llegan por correo</summary>
             <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
               <label class="check"><input type="checkbox" name="email_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['email_off'], true)) ?>> <?= e($lbl) ?></label>

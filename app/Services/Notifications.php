@@ -60,7 +60,8 @@ final class Notifications
     ];
 
     /** 1.9: categories that also go by e-mail by default (only if the installation can send e-mail). */
-    public const EMAIL_DEFAULT = ['assigned', 'due', 'overdue', 'sprint', 'capacity', 'weekly'];
+    /** 1.16.2: every category by e-mail by default too (before: assignments, due, overdue, sprints, capacity). */
+    public const EMAIL_DEFAULT = ['assigned', 'due', 'overdue', 'date', 'calendar', 'sprint', 'project', 'comments', 'capacity', 'weekly', 'watching', 'automation', 'monitor'];
 
     /** 1.9: reminders before the due moment (minutes). Default: 24 hours and 30 minutes. */
     public const BEFORE = [10080 => '1 semana antes', 4320 => '3 días antes', 1440 => '24 horas antes', 120 => '2 horas antes', 30 => '30 minutos antes'];
@@ -112,7 +113,8 @@ final class Notifications
                 'lead' => $lead,
                 'before' => $before,
                 'email' => array_key_exists('email', $n) ? (bool)$n['email'] : true,
-                'email_off' => array_values(array_intersect((array)($n['email_off'] ?? array_diff(array_keys(self::CATEGORIES), self::EMAIL_DEFAULT)), array_keys(self::CATEGORIES))),
+                // 1.16.2: e-mail choices saved before that are exactly the old defaults follow the new ones
+                'email_off' => array_values(array_intersect((array)(isset($n['email_off']) && !((int)($n['v'] ?? 0) < 1162 && self::isOldEmailDefault((array)$n['email_off'])) ? $n['email_off'] : array_diff(array_keys(self::CATEGORIES), self::EMAIL_DEFAULT)), array_keys(self::CATEGORIES))),
                 // 1.16: quiet hours are off until the person turns them on (before, 22:00–07:00 held every
                 // notice of the night without the person having chosen it)
                 'quiet' => ['on' => array_key_exists('on', $q) ? !empty($q['on']) : false, 'from' => $hm($q['from'] ?? null, '22:00'), 'to' => $hm($q['to'] ?? null, '07:00')],
@@ -133,6 +135,16 @@ final class Notifications
         $a = ['capacity', 'comments', 'project', 'weekly'];
         $b = ['capacity', 'comments', 'project', 'watching', 'weekly'];
         return $off === $a || $off === $b;
+    }
+
+    /** E-mail categories that were off by default before 1.16.2 (1.9–1.11, 1.12–1.14, 1.15–1.16.1). */
+    private static function isOldEmailDefault(array $off): bool
+    {
+        sort($off);
+        foreach ([['calendar', 'comments', 'date', 'project'], ['calendar', 'comments', 'date', 'monitor', 'project'], ['automation', 'calendar', 'comments', 'date', 'monitor', 'project', 'watching']] as $old) {
+            if ($off === $old) return true;
+        }
+        return false;
     }
 
     public static function forgetPrefs(int $userId): void
@@ -163,7 +175,7 @@ final class Notifications
         }
         $tz = trim((string)($input['timezone'] ?? ''));
         if ($tz !== '' && !UserTime::valid($tz)) throw HttpException::invalid(['timezone' => 'Zona horaria no válida.']);
-        $n = ['v' => 116, 'off' => array_values(array_diff($cats, $on)), 'push' => $yes($input['push'] ?? false),
+        $n = ['v' => 1162, 'off' => array_values(array_diff($cats, $on)), 'push' => $yes($input['push'] ?? false),
             'push_off' => array_values(array_diff($cats, $pushOn)), 'lead' => $cur['lead'], 'before' => $before, 'weekly' => in_array('weekly', $on, true),
             'email' => array_key_exists('email', $input) ? $yes($input['email']) : $cur['email'], 'email_off' => array_values(array_diff($cats, $emailOn)), 'quiet' => $quiet,
             'sound' => !empty($input['has_sound']) ? $yes($input['sound'] ?? false) : $cur['sound'],
@@ -209,7 +221,7 @@ final class Notifications
         $db = Database::get();
         $sql = 'INSERT ' . ($dedupe ? 'IGNORE ' : '') . 'INTO notifications (user_id, workspace_id, type, actor_id, project_id, task_id, message, url, dedupe_key, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)';
         $n = $db->run($sql, [$userId, $wsId, $type, $actorId, $projectId, $taskId, mb_substr($message, 0, 255), $url, $dedupe ? mb_substr($dedupe, 0, 80) : null, now()])->rowCount();
-        if ($n > 0) Push::later($userId);
+        if ($n > 0) { Push::later($userId); NotificationMail::later($userId); }
         return $n > 0;
     }
 

@@ -169,6 +169,7 @@ $r->post('/api/google/export', [Api\CalendarApi::class, 'exportConfigure']);
 $r->post('/api/google/export/sync', [Api\CalendarApi::class, 'exportSync']);
 $r->post('/api/google/export/stop', [Api\CalendarApi::class, 'exportStop']);
 $r->post('/api/mail/test', [Api\ToolsApi::class, 'mailTest']);
+$r->post('/api/mail/settings', [Api\ToolsApi::class, 'mailSave']); // 1.16.2
 
 $r->post('/api/teams', [Api\TeamApi::class, 'create']);
 $r->patch('/api/teams/{id}', [Api\TeamApi::class, 'update']);

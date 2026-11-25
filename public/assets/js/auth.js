@@ -1,5 +1,5 @@
 // Login, registration, invitation and installer pages: block double submission.
-import './email-check.js?v=1.16.1';
+import './email-check.js?v=1.16.2';
 document.addEventListener('submit', (e) => {
   const form = e.target;
   if (form.dataset.sent) { e.preventDefault(); return; }

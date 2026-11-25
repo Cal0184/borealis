@@ -78,3 +78,16 @@ Cuando el servicio externo funciona, el motor interno se pone en reposo solo, y 
    - **Chrome:** en `chrome://settings/content/notifications`, tu dominio debe estar en «Pueden enviar notificaciones». En Configuración › Sistema conviene activar «Seguir ejecutando aplicaciones en segundo plano al cerrar Google Chrome»: así llegan incluso con todas las ventanas cerradas.
    - **Edge:** en `edge://settings/content/notifications`, lo mismo. En Sistema y rendimiento, activa «Seguir ejecutando extensiones y aplicaciones en segundo plano».
 4. **Sonido:** Perfil › Notificaciones › «Con sonido». El sonido es el de notificaciones del sistema; en Windows se cambia o se activa en Configuración › Sistema › Notificaciones › (navegador) › «Reproducir un sonido».
+
+## 8. Correo (1.16.2): sin tocar archivos
+
+1. Entra como administración de la instalación y ve a **Administración › Datos › Correo**.
+2. En **Proveedor** elige el tuyo; se rellenan el servidor y el puerto.
+   - **Buzón de tu dominio** (lo más recomendable): crea en el panel de tu alojamiento una cuenta como `avisos@tu-dominio.cl`. Su servidor suele ser `mail.tu-dominio.cl`, con el puerto 465.
+   - **Gmail o Google Workspace:** activa la verificación en dos pasos y crea una **contraseña de aplicación** (Cuenta de Google › Seguridad › Contraseñas de aplicaciones). La contraseña normal no funciona.
+   - **Microsoft 365 u Outlook:** la cuenta debe tener permitido «SMTP autenticado». Con verificación en dos pasos, usa una contraseña de aplicación.
+3. Escribe el usuario (normalmente el mismo correo), la contraseña y el **remitente**: usa el mismo buzón, para que no llegue a spam.
+4. Pulsa **Guardar y probar**. Debe llegarte un correo de prueba. Si no sale, la pantalla indica el motivo: contraseña incorrecta, puerto bloqueado por el alojamiento (prueba con 587) o certificado no válido.
+5. Cada persona elige qué recibe por correo en **Perfil › Notificaciones › Por correo**. Todo viene activado.
+
+Si los correos llegan a spam, revisa en el panel de DNS de tu dominio que exista un registro SPF que incluya tu servidor de correo, y activa DKIM si el panel lo ofrece.
