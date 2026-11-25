@@ -48,9 +48,29 @@ final class CronController
         if (!preg_match('/^[a-f0-9]{16}$/', $chain) || !\Borealis\Services\Heartbeat::enabled()) { $text('Sin efecto.', 409); return; }
         ignore_user_abort(true);
         @set_time_limit(0);
-        header('Connection: close');
         $text('Latido recibido.', 202);
-        if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request(); else { @ob_end_flush(); @flush(); }
+        \Borealis\Core\Background::detach(); // 1.16: PHP-FPM, LiteSpeed or Apache
         \Borealis\Services\Heartbeat::beat($chain);
+    }
+
+    /**
+     * 1.16 · /cron/ping: «somebody is around», without token, session or cookies. The service worker
+     * calls it when a device receives a notice and when the browser wakes it up by itself (periodic
+     * background sync of an installed Borealis), so every device helps to keep the job and the
+     * engine running even when no page of Borealis is open. It answers 204 with nothing in it and
+     * can start at most what a visit starts: the engine (once a minute at most) and the job (once
+     * every two minutes at most, never twice at a time).
+     */
+    public static function ping(Request $r): void
+    {
+        (new Response('', 204, ['Cache-Control' => 'no-store', 'X-Robots-Tag' => 'noindex']))->send();
+        try {
+            if (!Scheduler::ready() || (new Migrator(Database::get()->pdo))->pending()) return;
+        } catch (\Throwable) { return; }
+        register_shutdown_function(function () {
+            \Borealis\Core\Background::detach();
+            \Borealis\Services\Heartbeat::ensure();
+        });
+        Scheduler::afterResponse('device');
     }
 }

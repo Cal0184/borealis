@@ -23,6 +23,11 @@ if ($request->path === '/cron/tick') {
     try { Borealis\Controllers\CronController::tick($request); } catch (Throwable $e) { error_log('[Borealis] motor de avisos: ' . $e->getMessage()); }
     exit;
 }
+// 1.16: a device (service worker) or a page says «somebody is around» (see CronController::ping).
+if ($request->path === '/cron/ping') {
+    try { Borealis\Controllers\CronController::ping($request); } catch (Throwable $e) { error_log('[Borealis] ping: ' . $e->getMessage()); }
+    exit;
+}
 if ($request->path === '/cron/run') {
     try { Borealis\Controllers\CronController::handle($request)->send(); } catch (Throwable $e) { error_log('[Borealis] cron: ' . $e->getMessage()); http_response_code(500); echo "Error\n"; }
     exit;

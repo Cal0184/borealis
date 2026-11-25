@@ -142,7 +142,7 @@ final class Push
         if (self::$hooked || PHP_SAPI === 'cli') return;
         self::$hooked = true;
         register_shutdown_function(function () {
-            if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+            \Borealis\Core\Background::detach(); // 1.16: PHP-FPM, LiteSpeed or Apache
             try { foreach (array_keys(self::$pending) as $uid) self::flush((int)$uid); } catch (\Throwable $e) { error_log('[Borealis] push: ' . $e->getMessage()); }
         });
     }

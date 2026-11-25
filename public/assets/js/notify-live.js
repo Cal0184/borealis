@@ -10,7 +10,7 @@
 //  - new notices show as a toast only when this device does not get system notifications (to avoid
 //    showing the same notice twice); the badge always updates;
 //  - the service worker asks the page whether it has unsaved changes before following a notice.
-import { appUrl, meta, toast } from './core.js?v=1.15.1';
+import { appUrl, meta, toast } from './core.js?v=1.16.0';
 
 const POLL_MS = 60000;
 let latest = null;
@@ -37,6 +37,8 @@ function sessionEnded() {
   bar.innerHTML = 'Tu sesión terminó. Lo que escribiste sigue aquí: <a target="_blank" rel="noopener">inicia sesión en otra pestaña</a> y vuelve para guardar.';
   bar.querySelector('a').href = appUrl('/login');
   document.body.prepend(bar);
+  // 1.16: a banner can sit behind an open dialog; the notice (above dialogs) says it too
+  if (document.querySelector('dialog[open]')) toast('Tu sesión terminó. Lo que escribiste sigue aquí: inicia sesión en otra pestaña y vuelve para guardar.', { type: 'error', timeout: 15000 });
   // when the person signs in elsewhere, this tab notices on the next focus
   window.addEventListener('focus', () => { stopped = false; check(true); }, { once: true });
 }

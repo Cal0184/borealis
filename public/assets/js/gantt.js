@@ -1,6 +1,6 @@
 // 1.14 · Carta Gantt: draws the «blocks» dependencies as arrows between bars (red when the
 // successor is planned to start before its predecessor ends). Everything else is plain HTML/CSS.
-import { onInit } from './core.js?v=1.15.1';
+import { onInit } from './core.js?v=1.16.0';
 
 function draw(root) {
   const svg = root.querySelector('[data-gantt-links]');

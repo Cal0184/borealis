@@ -3,6 +3,8 @@
 # with NO cron job, NOBODY signed in and NO browser open.
 #
 #   tests/fpm/engine.sh <installed-app-dir>
+#   SERVER=apache tests/fpm/engine.sh <installed-app-dir>   (1.16: Apache + mod_php, the usual
+#                                                          shared hosting managed only by FTP)
 #
 # The app dir must hold an installed Borealis (config/config.php + storage keys), for example the
 # one left by tests/e2e/run.mjs. The script copies it to /srv/borealis-fpm with its own copy of
@@ -12,9 +14,13 @@
 #   2. a task due tomorrow is written directly to the database (no web request);
 #   3. waits: the engine must create the reminder and deliver it to the «phone» by itself;
 #   4. runs php bin/notify.php (a real cron) — the engine must notice and stop.
-# Needs root, nginx and php8.x-fpm. Writes the results to /tmp/engine.json.
+#   5. 1.16: the hosting kills the engine; a device that receives a notice (/cron/ping, as the
+#      service worker does) starts it again, with nobody signed in.
+# Needs root and nginx + php8.x-fpm (or apache2 + libapache2-mod-php). Writes /tmp/engine-<server>.json.
 set -u
 SRC=${1:?app dir}
+SERVER=${SERVER:-fpm}
+ACCESS=/var/log/borealis-engine-access.log
 APP=/srv/borealis-fpm
 DB=borealis_fpm
 PORT=8090
@@ -42,9 +48,28 @@ file_put_contents($f, "<?php\nreturn " . var_export($c, true) . ";\n");'
 grep -q borealis.test /etc/hosts || echo "127.0.0.1 borealis.test" >> /etc/hosts
 chown -R www-data:www-data $APP/storage $APP/config
 
+: > $ACCESS; chmod 666 $ACCESS
+if [ "$SERVER" = apache ]; then
+  apache2ctl stop 2>/dev/null; sleep 1
+  a2dismod -q mpm_event >/dev/null 2>&1; a2enmod -q mpm_prefork rewrite php$V >/dev/null 2>&1 || a2enmod -q mpm_prefork rewrite "php$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')" >/dev/null
+  cat > /etc/apache2/sites-enabled/borealis-engine.conf <<AP
+Listen $PORT
+<VirtualHost *:$PORT>
+  ServerName borealis.test
+  DocumentRoot $APP/public
+  <Directory $APP/public>
+    AllowOverride All
+    Require all granted
+  </Directory>
+  CustomLog $ACCESS "%h %t \"%r\" %>s"
+</VirtualHost>
+AP
+  rm -f /etc/apache2/sites-enabled/000-default.conf
+  apache2ctl start
+else
 cat > /etc/nginx/sites-enabled/borealis-fpm.conf <<NG
 server {
-  listen $PORT; server_name borealis.test;
+  listen $PORT; server_name borealis.test; access_log $ACCESS;
   root $APP/public; index index.php;
   location / { try_files \$uri /index.php?\$query_string; }
   location ~ \.php\$ { include fastcgi_params; fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name; fastcgi_pass unix:/run/php/borealis-fpm.sock; fastcgi_read_timeout 300; }
@@ -67,8 +92,8 @@ pm.max_spare_servers = 3
 request_terminate_timeout = 300s
 PL
 rm -f /etc/php/$V/fpm/pool.d/www.conf
-mkdir -p /var/log/nginx; : > /var/log/nginx/access.log
 $FPM -D && nginx
+fi
 FAKE_SERVICES_LOG=/tmp/engine-push.jsonl php -S 127.0.0.1:$FS $APP/tests/fake-services/server.php >/dev/null 2>&1 &
 sleep 1; curl -s -X POST http://127.0.0.1:$FS/_reset >/dev/null
 
@@ -113,7 +138,7 @@ MSG=$(php $APP/tests/fpm/phone.php read /tmp/engine-phone.json "http://127.0.0.1
 check "El teléfono descifra el aviso y nombra la tarea" $(echo "$MSG" | grep -q 'informe del motor' && echo 1 || echo 0) "$(echo "$MSG" | grep 'informe del motor')"
 SRC_=$(sql "SELECT last_source FROM system_jobs WHERE name='notify'")
 check "La ejecución quedó registrada como «motor interno»" $([ "$SRC_" = engine ] && echo 1 || echo 0) "$SRC_"
-LOGINS=$(grep 'GET /' /var/log/nginx/access.log | grep -vc 'GET /cron/')
+LOGINS=$(grep 'GET /' $ACCESS | grep -vc 'GET /cron/')
 check "Entre tanto ninguna persona hizo otra petición (solo la visita inicial)" $([ "$LOGINS" -le 1 ] && echo 1 || echo 0) "GET: $LOGINS"
 
 echo "4. Sigue latiendo"
@@ -122,7 +147,7 @@ TICKS=$(php -r '$j = json_decode(file_get_contents("'$APP'/storage/heartbeat.jso
 check "El motor late de forma continua (≥ 2 latidos)" $([ "$TICKS" -ge 2 ] && echo 1 || echo 0) "ticks=$TICKS"
 DUP=$(php $APP/tests/fpm/phone.php read /tmp/engine-phone.json "http://127.0.0.1:$FS" ana-telefono | grep -c 'informe del motor')
 check "El mismo aviso no se envía dos veces" $([ "$DUP" = 1 ] && echo 1 || echo 0) "envíos=$DUP"
-CHAINS=$(grep -c 'POST /cron/tick' /var/log/nginx/access.log); EXPECT=$(( ( $(date +%s) - T0 ) / INTERVAL + 2 ))
+CHAINS=$(grep -c 'POST /cron/tick' $ACCESS); EXPECT=$(( ( $(date +%s) - T0 ) / INTERVAL + 2 ))
 check "Una sola cadena (no se multiplican los latidos)" $([ "$CHAINS" -le "$EXPECT" ] && echo 1 || echo 0) "latidos=$CHAINS máx=$EXPECT"
 
 echo "5. Con un cron real, el motor se detiene solo"
@@ -131,7 +156,22 @@ sleep $((INTERVAL+8))
 STOP=$(php -r '$j = json_decode(file_get_contents("'$APP'/storage/heartbeat.json"), true); echo $j["stopped"] ?? "";')
 check "Al detectar el cron, el motor se detiene («cron»)" $([ "$STOP" = cron ] && echo 1 || echo 0) "stopped=$STOP"
 
+echo "6. 1.16 · El alojamiento corta el motor; un dispositivo que recibe un aviso lo reanuda"
+sql "UPDATE system_jobs SET cli_ok_at = NULL, last_source = 'engine', last_started_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 20 MINUTE)"
+php -r '$f = "'$APP'/storage/heartbeat.json"; $j = json_decode(file_get_contents($f), true); $j["beat"] = time() - 900; $j["stopped"] = "error"; $j["attempt"] = time() - 900; file_put_contents($f, json_encode($j));'
+OLDCHAIN=$(php -r '$j = json_decode(file_get_contents("'$APP'/storage/heartbeat.json"), true); echo $j["chain"];')
+CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://borealis.test:$PORT/cron/ping?src=push")
+sleep 4
+NEWCHAIN=$(php -r '$j = json_decode(file_get_contents("'$APP'/storage/heartbeat.json"), true); echo ($j["stopped"] ?? "") === "" && $j["beat"] >= time() - 30 ? $j["chain"] : "";')
+check "/cron/ping (service worker) responde 204 y vuelve a arrancar el motor sin sesión" $([ "$CODE" = 204 ] && [ -n "$NEWCHAIN" ] && [ "$NEWCHAIN" != "$OLDCHAIN" ] && echo 1 || echo 0) "código=$CODE cadena=$NEWCHAIN"
+SRC2=$(sql "SELECT last_source FROM system_jobs WHERE name='notify'")
+check "…y la tarea programada se ejecutó en ese momento" $([ "$SRC2" = device ] || [ "$SRC2" = engine ] && echo 1 || echo 0) "$SRC2"
+CL=$(curl -s -D - -o /dev/null http://borealis.test:$PORT/login | tr -d '\r' | grep -i '^content-length:' | awk '{print $2}')
+[ "$SERVER" = apache ] && check "Apache (modo compatible): la página indica su tamaño para que el navegador no espere el trabajo posterior" $([ -n "$CL" ] && echo 1 || echo 0) "content-length=$CL"
+
 echo "Resultado: $PASS correctas, $FAIL con fallas"
-( IFS=,; echo "{\"passed\":$PASS,\"failed\":$FAIL,\"interval\":$INTERVAL,\"checks\":[${OUT[*]}]}" ) > /tmp/engine.json
-nginx -s stop; pkill -f php-fpm; pkill -f "fake-services/server.php"
+( IFS=,; echo "{\"server\":\"$SERVER\",\"passed\":$PASS,\"failed\":$FAIL,\"interval\":$INTERVAL,\"checks\":[${OUT[*]}]}" ) > /tmp/engine-$SERVER.json
+cp /tmp/engine-$SERVER.json /tmp/engine.json
+if [ "$SERVER" = apache ]; then apache2ctl stop; else nginx -s stop; pkill -f php-fpm; fi
+pkill -f "fake-services/server.php"
 [ $FAIL = 0 ]

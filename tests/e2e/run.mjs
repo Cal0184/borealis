@@ -2046,6 +2046,38 @@ await attempt('Teclado: foco visible y atajo de búsqueda', async () => {
   check('El elemento enfocado muestra un indicador visible', !/^none none$/.test(outline), outline);
 });
 
+section('Novedades 1.16');
+await attempt('1.16: avisos visibles encima de una confirmación abierta', async () => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(BASE + '/my-work');
+  await page.evaluate(() => { const d = document.getElementById('dlg-confirm'); d.querySelector('[data-confirm-text]').textContent = '¿Eliminar esta tarea?'; d.showModal(); });
+  const v = await page.evaluate(() => document.querySelector('script[type="module"][src*="app.js"]')?.src.split('?v=')[1] || '');
+  await page.evaluate(async (ver) => { const m = await import(new URL('assets/js/core.js?v=' + ver, document.baseURI.replace(/my-work.*$/, '')).href); m.toast('Asignación: Revisar el contrato', { link: { href: '#', label: 'Ver' }, timeout: 8000 }); }, v);
+  await page.waitForTimeout(300);
+  const onTop = await page.evaluate(() => {
+    const t = document.querySelector('#toasts .toast:last-child');
+    if (!t) return 'sin aviso';
+    const r = t.getBoundingClientRect();
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return el && el.closest('.toast') === t ? 'ok' : (el?.outerHTML || 'nada').slice(0, 120);
+  });
+  check('Un aviso que llega con una confirmación abierta se ve encima de ella (antes quedaba escondido detrás)', onTop === 'ok', onTop);
+  await page.screenshot({ path: `${SHOTS}/70-aviso-sobre-confirmacion.png` });
+  await page.evaluate(() => document.getElementById('dlg-confirm').close());
+  check('La invitación a activar las notificaciones existe en cualquier página', await page.locator('[data-push-nudge]').count() === 1);
+});
+await attempt('1.16: Administración › Notificaciones sin acceso al servidor', async () => {
+  await page.goto(BASE + '/admin/notifications');
+  check('Explica qué funciona sin configurar nada y cómo usar un servicio externo gratuito', await page.locator('[data-layers]').isVisible() && /cron-job\.org/.test(await page.locator('main').textContent()));
+  await page.screenshot({ path: `${SHOTS}/71-admin-sin-servidor.png`, fullPage: true });
+});
+await attempt('1.16: service worker', async () => {
+  const sw = await page.evaluate(async () => { const r = await navigator.serviceWorker?.ready; return r?.active?.scriptURL || ''; });
+  check('El service worker de Borealis está activo (recibe avisos con Borealis cerrado)', /sw\.js$/.test(sw), sw);
+  const ping = await page.evaluate(async () => (await fetch(new URL('cron/ping?src=sync', document.baseURI.replace(/admin\/notifications.*$/, '')), { method: 'POST', credentials: 'omit' })).status);
+  check('/cron/ping responde 204 sin sesión (lo usa el service worker)', ping === 204, String(ping));
+});
+
 section('Errores de JavaScript');
 check('Sin errores de JavaScript en la consola durante todo el recorrido', consoleErrors.length === 0, consoleErrors.slice(0, 5).join(' | '));
 

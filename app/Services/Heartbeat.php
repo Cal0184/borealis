@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Borealis\Services;
 
+use Borealis\Core\Background;
 use Borealis\Core\Database;
 
 /**
@@ -19,9 +20,11 @@ use Borealis\Core\Database;
  * Only one chain lives at a time (storage/heartbeat.json holds its id; a tick of an old chain
  * stops). When a real cron job runs (php bin/notify.php or /cron/run), the chain stops by
  * itself, because cron is more robust (it survives a server restart without any visit).
- * Limits, documented in CONFIGURACION-1.15: needs PHP-FPM (HestiaCP, most hosts) and the server
- * being able to reach its own address; after a restart of the server it starts again with the
- * first visit. It holds one PHP-FPM worker sleeping between beats.
+ * Limits, documented in CONFIGURACION-1.16: the server must be able to reach its own address;
+ * after a restart of the server (or if the hosting stops long requests) it starts again with the
+ * next request of any kind: a visit, a page left open, or a device that received a notice
+ * (service worker → /cron/ping). It holds one PHP worker sleeping between beats.
+ * 1.16: works with PHP-FPM, LiteSpeed and Apache (Core/Background.php), not only PHP-FPM.
  * 'cron.heartbeat' => false turns it off; 'always' allows it without PHP-FPM (tests).
  */
 final class Heartbeat
@@ -40,8 +43,18 @@ final class Heartbeat
     {
         $mode = config('cron.heartbeat', true);
         if ($mode === false || $mode === 'off') return false;
-        if ($mode !== 'always' && !function_exists('fastcgi_finish_request')) return false;
+        if ($mode !== 'always' && !self::serverCan()) return false;
         return Scheduler::ready();
+    }
+
+    /**
+     * 1.16 · the web server can keep working after answering: PHP-FPM, LiteSpeed, Apache. Not PHP's
+     * built-in test server (it serves one request at a time: a sleeping beat would block it).
+     */
+    public static function serverCan(): bool
+    {
+        $m = Background::mode();
+        return $m === 'fpm' || $m === 'litespeed' || ($m === 'compat' && PHP_SAPI !== 'cli-server');
     }
 
     private static function file(): string
@@ -109,7 +122,7 @@ final class Heartbeat
      * address cannot be reached from the server itself, tries once more through 127.0.0.1 with the
      * same name (curl --resolve), which keeps the HTTPS certificate valid.
      */
-    public static function fire(string $chain): bool
+    public static function fire(string $chain, bool $markStopped = true): bool
     {
         $url = self::tickUrl();
         $err = self::post($url, $chain, false);
@@ -119,7 +132,7 @@ final class Heartbeat
         }
         if ($err !== null) {
             $s = self::state();
-            if (($s['chain'] ?? null) === $chain) { $s['error'] = mb_substr($err, 0, 300); $s['stopped'] = 'error'; self::save($s); }
+            if (($s['chain'] ?? null) === $chain) { $s['error'] = mb_substr($err, 0, 300); if ($markStopped) $s['stopped'] = 'error'; self::save($s); }
             error_log('[Borealis] motor de avisos: ' . $err);
             return false;
         }
@@ -139,6 +152,14 @@ final class Heartbeat
             CURLOPT_TIMEOUT => 8,
             CURLOPT_HTTPHEADER => ['X-Borealis-Token: ' . Scheduler::token(), 'X-Borealis-Chain: ' . $chain, 'User-Agent: Borealis-heartbeat'],
         ];
+        // 1.16: the status line is enough. A server that holds the rest of the answer (Apache with
+        // compression) still accepted the beat when it said 202.
+        $code = 0;
+        $opts[CURLOPT_HEADERFUNCTION] = function ($h, string $line) use (&$code) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $line, $m)) $code = (int)$m[1];
+            if ($code === 202 && trim($line) === '') return 0; // headers complete and accepted: stop waiting
+            return strlen($line);
+        };
         if ($loopback) {
             $p = parse_url($url);
             $port = $p['port'] ?? (($p['scheme'] ?? 'http') === 'https' ? 443 : 80);
@@ -146,10 +167,11 @@ final class Heartbeat
         }
         curl_setopt_array($ch, $opts);
         $body = curl_exec($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $code = $code ?: (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
         $error = curl_error($ch);
         curl_close($ch);
+        if ($code === 202) return null;
         if ($errno) return ($errno === CURLE_COULDNT_CONNECT || $errno === CURLE_COULDNT_RESOLVE_HOST || $errno === CURLE_OPERATION_TIMEDOUT ? 'conexión: ' : '') . $error;
         if ($code === 202) return null;
         return 'respuesta ' . $code . ($body ? ' (' . mb_substr(trim((string)$body), 0, 80) . ')' : '');
@@ -187,7 +209,12 @@ final class Heartbeat
             if (($cur['chain'] ?? null) === $chain) { $cur['stopped'] = 'cron'; self::save($cur); }
             return;
         }
-        self::fire($chain);
+        // 1.16: a passing failure (the server busy for a moment) gets a second try before the chain stops
+        if (!self::fire($chain, false)) {
+            sleep(10);
+            $cur = self::state();
+            if (($cur['chain'] ?? null) === $chain && empty($cur['stopped'])) self::fire($chain);
+        }
     }
 
     /** For Administración: running / stopped and why. */
@@ -203,7 +230,8 @@ final class Heartbeat
             'ticks' => (int)$s['ticks'],
             'error' => $s['error'],
             'stopped' => $s['stopped'],
-            'fpm' => function_exists('fastcgi_finish_request'),
+            'fpm' => self::serverCan(),
+            'server' => Background::label(),
         ];
     }
 }

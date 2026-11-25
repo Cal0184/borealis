@@ -1,5 +1,33 @@
 # Cambios
 
+## 1.16.0 (25/11/2026)
+
+Avisos con Borealis cerrado en un alojamiento administrado solo por FTP, sin SSH ni cron. No tiene migraciones nuevas. Guía: `docs/CONFIGURACION-1.16.md`. Auditoría y causas: `docs/INFORME-1.16.md`.
+
+**Causa principal corregida: el trabajo «después de responder» solo existía con PHP-FPM.** El motor interno (1.15.1), el respaldo por visitas (1.14) y el envío inmediato dependían de `fastcgi_finish_request()`. En alojamientos con LiteSpeed o Apache esa función no existe, así que el motor y el respaldo quedaban apagados y los recordatorios solo se creaban cuando alguien volvía a entrar.
+- **`app/Core/Background.php`:** cierra la respuesta y sigue trabajando con PHP-FPM, LiteSpeed (`litespeed_finish_request`) o Apache/otros (modo compatible: `Content-Length`, `Connection: close` e `ignore_user_abort`).
+- **Motor interno y respaldo por visitas:** activos en los tres tipos de servidor. El motor reintenta una vez antes de detenerse, y considera aceptado un latido en cuanto recibe «202», aunque el servidor retenga el resto de la respuesta.
+- **Prueba real:** con Apache + mod_php además de Nginx + PHP-FPM (`SERVER=apache tests/fpm/engine.sh`).
+
+**Los dispositivos mantienen vivo el motor.**
+- **`/cron/ping`:** dirección pública, sin sesión ni datos. Responde 204 y, como mucho, arranca el motor (una vez por minuto) y la tarea (una vez cada 2 minutos, nunca dos a la vez).
+- **Service worker:** llama a `/cron/ping` al recibir un aviso, al abrirlo y en la sincronización periódica del navegador (Chrome, Edge y Android con Borealis instalado). Si el alojamiento corta el motor, el siguiente aviso que llegue a cualquier dispositivo lo reanuda.
+- **Visitas:** una visita ejecuta la tarea si lleva más de 2 minutos sin ejecutarse (antes, 5).
+
+**Preferencias activadas por defecto.**
+- **Categorías:** todas llegan al dispositivo. Antes, cambios en proyectos, comentarios, capacidad y tareas que sigues había que activarlas a mano.
+- **Preferencias guardadas antes de 1.16:** quien no había cambiado nada pasa a las nuevas. Lo que alguien apagó a propósito se respeta.
+- **Horario de silencio:** apagado hasta que la persona lo elija. Antes venía activado de 22:00 a 07:00 y retenía los avisos de la noche.
+- **Permiso ya dado:** si el navegador ya lo concedió, el dispositivo se vuelve a vincular solo, salvo que la persona lo desactivara en ese dispositivo.
+- **Invitación a activar:** aparece en todas las páginas, no solo en Inicio. «Ahora no» la oculta una semana, no para siempre.
+
+**Confirmaciones abiertas.** Un `<dialog>` modal ocupa la capa superior del navegador, así que los avisos dentro de la página quedaban escondidos detrás de cualquier confirmación o formulario abierto. Ahora la caja de avisos es un *popover* y se muestra encima. El aviso de «sesión terminada» también se ve con un diálogo abierto.
+
+**Administración › Notificaciones.**
+- **Servidor detectado:** PHP-FPM, LiteSpeed o Apache.
+- **Qué funciona sin acceso al servidor y qué no.**
+- **Pasos para un servicio externo gratuito** (cron-job.org) con la dirección secreta `/cron/run`. Reemplaza las instrucciones de HestiaCP, que quedan como opción para paneles con «Tareas Cron».
+
 ## 1.15.1 (24/11/2026)
 
 Se entrega junto con la 1.15.0, en el mismo PR. No tiene migraciones nuevas.

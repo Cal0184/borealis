@@ -38,12 +38,13 @@ return [
     // 'subject' is a contact for the push services (mailto: or https:).
     // 'push' => ['subject' => 'mailto:soporte@tu-dominio.cl'],
     // 1.15 (optional): the internal notification engine keeps reminders and phone notices going
-    // without cron and without anybody having Borealis open (needs PHP-FPM, as on HestiaCP).
+    // without cron and without anybody having Borealis open (1.16: PHP-FPM, LiteSpeed or Apache).
     // It stops by itself while a real cron job runs. Defaults shown; nothing to set normally.
     // 'cron' => [
     //     'heartbeat' => true,            // false turns the engine off
     //     'heartbeat_seconds' => 60,      // time between beats (1–300)
     //     'heartbeat_url' => '',          // only if the server reaches itself by another address
+    //     'web_fallback' => true,         // false: visits and /cron/ping do not start the job
     // ],
     // 1.9 (optional): e-mail notices. Leave it out and Borealis sends no e-mail (and says so).
     // Use a real mailbox of your domain (HestiaCP › Mail). Port 587 = STARTTLS, 465 = SSL.

@@ -159,6 +159,12 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
       </div>
     </header>
     <main class="content<?= !empty($wide) ? ' wide' : '' ?>" id="page" data-region tabindex="-1">
+      <?php /* 1.16: on every page (before: only Inicio), until the browser was asked; «Ahora no» = 7 days */ ?>
+      <div class="notice push-nudge row wrap" data-push-nudge hidden>
+        <?= icon('bell', 'sm') ?> <span class="grow">Recibe tus avisos en este dispositivo aunque Borealis esté cerrado.</span>
+        <button type="button" class="btn btn--sm btn--primary" data-push-nudge-on>Activar</button>
+        <button type="button" class="btn btn--sm btn--ghost" data-push-nudge-off>Ahora no</button>
+      </div>
       <?= $content ?>
     </main>
   </div>
@@ -175,7 +181,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
 <aside class="drawer" id="drawer" aria-label="Detalle de tarea" aria-hidden="true">
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
-<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite" popover="manual"></div>
 
 <?= partial('dialogs', ['s' => $s, 'currentProjectId' => $currentProjectId]) ?>
 </body>

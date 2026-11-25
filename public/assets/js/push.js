@@ -1,7 +1,7 @@
 // Mobile and desktop notifications (1.8) with the browser's standard Web Push.
 // Registers the service worker (sw.js, needed also to install Borealis on the Home Screen),
 // asks for permission only when the person presses «Activar», and keeps the server informed.
-import { api, basePath, onInit, toast } from './core.js?v=1.15.1';
+import { api, basePath, onInit, toast } from './core.js?v=1.16.0';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -38,12 +38,16 @@ async function sync() {
     if (!reg) return;
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    if (!sub && store.get('borealis-push') === '1') {
+    // 1.16: the permission is the person's choice. With it granted, this device gets notices unless
+    // the person turned them off here («Desactivar» stores '0'); before 1.16 only a device where
+    // «Activar» had been pressed earlier was re-linked, so a new browser stayed silent.
+    if (!sub && store.get('borealis-push') !== '0') {
       const { key } = await api('/api/push/key', { method: 'GET' });
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
       store.set('borealis-push-sync', '');
     }
     if (!sub) return;
+    periodic(reg);
     const day = new Date().toISOString().slice(0, 10) + '|' + sub.endpoint.slice(-24);
     if (store.get('borealis-push-sync') === day) return;
     await api('/api/push/subscription', { body: { ...subBody(sub), sync: 1 } });
@@ -53,19 +57,33 @@ async function sync() {
 }
 sync();
 
+// 1.16 · ask the browser to wake Borealis up now and then, even closed (installed app on Chrome,
+// Edge or Android). Each wake-up calls cron/ping, which keeps the engine and the job running.
+// Where the browser does not offer it (Firefox, Safari, a tab that is not installed) nothing happens.
+async function periodic(reg) {
+  try {
+    if (!('periodicSync' in reg)) return;
+    const st = await navigator.permissions.query({ name: 'periodic-background-sync' });
+    if (st.state !== 'granted') return;
+    await reg.periodicSync.register('borealis-ping', { minInterval: 15 * 60 * 1000 });
+  } catch { /* not available here */ }
+}
+
 // 1.14 · a short invitation (only on Inicio) the first time, while the browser has not been asked.
 onInit((root) => {
   root.querySelectorAll?.('[data-push-nudge]').forEach((el) => {
     if (el.dataset.ready) return;
     el.dataset.ready = '1';
-    const show = window.isSecureContext && supported() && Notification.permission === 'default' && store.get('borealis-push-nudge') !== 'no';
+    // 1.16: «Ahora no» hides it for 7 days (before: forever, and the person never saw it again)
+    const later = Number(store.get('borealis-push-nudge-until') || 0);
+    const show = window.isSecureContext && supported() && Notification.permission === 'default' && Date.now() > later;
     el.hidden = !show;
     el.querySelector('[data-push-nudge-on]')?.addEventListener('click', async () => {
       const box = { querySelector: () => null };
       el.hidden = true;
       await enable(box);
     });
-    el.querySelector('[data-push-nudge-off]')?.addEventListener('click', () => { store.set('borealis-push-nudge', 'no'); el.hidden = true; });
+    el.querySelector('[data-push-nudge-off]')?.addEventListener('click', () => { store.set('borealis-push-nudge-until', String(Date.now() + 7 * 86400000)); el.hidden = true; });
   });
 });
 
@@ -99,6 +117,7 @@ async function enable(box) {
     sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
     await api('/api/push/subscription', { body: subBody(sub) });
     store.set('borealis-push', '1');
+    periodic(reg);
     const flag = box.querySelector('[data-push-flag]');
     if (flag) flag.value = '1';
     const cats = box.querySelector('[data-push-cats]');

@@ -25,7 +25,7 @@ foreach (preg_split('/^-- @@\s*$/m', (string)file_get_contents($root . '/databas
     try { $q($sql); } catch (PDOException $e) { if (!in_array((int)($e->errorInfo[1] ?? 0), [1060, 1061, 1050], true)) $errors[] = $e->getMessage(); }
 }
 check('La migración 017 se puede repetir sin errores', !$errors, implode(' | ', $errors));
-check('Versión 1.15.1', str_contains((string)file_get_contents($root . '/app/bootstrap.php'), "'1.15.1'"));
+check('Versión 1.15.1 o posterior', preg_match("/BOREALIS_VERSION', '([^']+)'/", (string)file_get_contents($root . '/app/bootstrap.php'), $vm15) === 1 && version_compare($vm15[1], '1.15.1', '>='));
 
 // ================================================================ notices while a page is open
 group('1.15 · Avisos con la página abierta');

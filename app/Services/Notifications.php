@@ -37,7 +37,12 @@ final class Notifications
         'automation' => 'Automatización',
     ];
 
-    /** What the person chooses to receive. key => [label, description, push by default]. */
+    /**
+     * What the person chooses to receive. key => [label, description, push by default].
+     * 1.16: every category goes to the person's devices by default (before, project changes,
+     * comments, capacity and followed tasks had to be turned on by hand). The browser's permission
+     * is still asked only when the person presses «Activar».
+     */
     public const CATEGORIES = [
         'assigned' => ['Nuevas asignaciones', 'Cuando te hacen responsable de una tarea, a ti o a tu equipo, o dejas de serlo.', true],
         'due' => ['Tareas por vencer', 'Antes de la fecha límite de tus tareas abiertas.', true],
@@ -45,11 +50,11 @@ final class Notifications
         'date' => ['Cambios de fecha de entrega', 'Cuando cambia la fecha límite de una tarea tuya.', true],
         'calendar' => ['Reuniones y eventos', 'Invitaciones, cancelaciones y recordatorios de eventos próximos.', true],
         'sprint' => ['Sprints', 'Próximo inicio, inicio, cierre cercano, fecha de fin alcanzada y cierre.', true],
-        'project' => ['Cambios en proyectos', 'Te añaden a un proyecto, cambia su entrega, se completa o finaliza una tarea que creaste.', false],
-        'comments' => ['Menciones y comentarios', 'Te mencionan o comentan una tarea tuya.', false],
-        'capacity' => ['Capacidad', 'Alguien completó sus horas de la semana y aún tiene tareas planificadas pendientes.', false],
+        'project' => ['Cambios en proyectos', 'Te añaden a un proyecto, cambia su entrega, se completa o finaliza una tarea que creaste.', true],
+        'comments' => ['Menciones y comentarios', 'Te mencionan o comentan una tarea tuya.', true],
+        'capacity' => ['Capacidad', 'Alguien completó sus horas de la semana y aún tiene tareas planificadas pendientes.', true],
         'weekly' => ['Resumen semanal', 'Los lunes por la mañana: lo que vence en la semana y lo vencido.', false],
-        'watching' => ['Tareas que sigues', 'Comentarios y cambios de estado en tareas que sigues sin ser responsable (1.15). Comentar en una tarea te hace seguirla; puedes dejar de seguirla cuando quieras.', false],
+        'watching' => ['Tareas que sigues', 'Comentarios y cambios de estado en tareas que sigues sin ser responsable (1.15). Comentar en una tarea te hace seguirla; puedes dejar de seguirla cuando quieras.', true],
         'automation' => ['Automatizaciones', 'Avisos que envían las reglas automáticas del espacio: tareas vencidas, bloqueos resueltos, revisiones pendientes (1.15).', true],
         'monitor' => ['Alertas de monitoreo', 'Bloqueos, dependencias en riesgo, sobrecarga y desviaciones (1.12). Primero a quien es responsable; si nadie la revisa, a quien lleva el proyecto y, si es crítica, a la administración.', true],
     ];
@@ -85,6 +90,9 @@ final class Notifications
             $raw = $userId === Auth::id() ? (Auth::user()['prefs'] ?? []) : (json_decode((string)Database::get()->value('SELECT prefs FROM users WHERE id = ?', [$userId]), true) ?: []);
             $n = is_array($raw['notify'] ?? null) ? $raw['notify'] : [];
             $pushOff = $n['push_off'] ?? array_keys(array_filter(self::CATEGORIES, fn($c) => !$c[2]));
+            // 1.16: choices saved before 1.16 that are exactly the old defaults (nothing changed by the
+            // person) follow the new defaults: everything on.
+            if ((int)($n['v'] ?? 0) < 116 && isset($n['push_off']) && self::isOldPushDefault((array)$n['push_off'])) $pushOff = array_keys(array_filter(self::CATEGORIES, fn($c) => !$c[2]));
             $lead = isset(self::LEAD[(int)($n['lead'] ?? 1)]) ? (int)($n['lead'] ?? 1) : 1;
             // 1.9: «before» replaces «lead»; a 1.8 choice of N days becomes N days (closest option) + 30 minutes
             $before = isset($n['before']) ? array_values(array_intersect(array_map('intval', (array)$n['before']), array_keys(self::BEFORE)))
@@ -105,11 +113,22 @@ final class Notifications
                 'before' => $before,
                 'email' => array_key_exists('email', $n) ? (bool)$n['email'] : true,
                 'email_off' => array_values(array_intersect((array)($n['email_off'] ?? array_diff(array_keys(self::CATEGORIES), self::EMAIL_DEFAULT)), array_keys(self::CATEGORIES))),
-                'quiet' => ['on' => array_key_exists('on', $q) ? !empty($q['on']) : true, 'from' => $hm($q['from'] ?? null, '22:00'), 'to' => $hm($q['to'] ?? null, '07:00')],
+                // 1.16: quiet hours are off until the person turns them on (before, 22:00–07:00 held every
+                // notice of the night without the person having chosen it)
+                'quiet' => ['on' => array_key_exists('on', $q) ? !empty($q['on']) : false, 'from' => $hm($q['from'] ?? null, '22:00'), 'to' => $hm($q['to'] ?? null, '07:00')],
                 'timezone' => UserTime::valid($raw['timezone'] ?? null) ? $raw['timezone'] : null,
             ];
         }
         return self::$prefsCache[$userId];
+    }
+
+    /** Push categories that were off by default before 1.16 (1.8–1.14, and 1.15 with «Tareas que sigues»). */
+    private static function isOldPushDefault(array $off): bool
+    {
+        sort($off);
+        $a = ['capacity', 'comments', 'project', 'weekly'];
+        $b = ['capacity', 'comments', 'project', 'watching', 'weekly'];
+        return $off === $a || $off === $b;
     }
 
     public static function forgetPrefs(int $userId): void
@@ -140,7 +159,7 @@ final class Notifications
         }
         $tz = trim((string)($input['timezone'] ?? ''));
         if ($tz !== '' && !UserTime::valid($tz)) throw HttpException::invalid(['timezone' => 'Zona horaria no válida.']);
-        $n = ['off' => array_values(array_diff($cats, $on)), 'push' => $yes($input['push'] ?? false),
+        $n = ['v' => 116, 'off' => array_values(array_diff($cats, $on)), 'push' => $yes($input['push'] ?? false),
             'push_off' => array_values(array_diff($cats, $pushOn)), 'lead' => $cur['lead'], 'before' => $before, 'weekly' => in_array('weekly', $on, true),
             'email' => array_key_exists('email', $input) ? $yes($input['email']) : $cur['email'], 'email_off' => array_values(array_diff($cats, $emailOn)), 'quiet' => $quiet];
         $prefs = Auth::user()['prefs'] ?? [];

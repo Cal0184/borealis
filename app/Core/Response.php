@@ -66,6 +66,9 @@ final class Response
             foreach ($this->headers + $defaults as $k => $v) {
                 header($k . ': ' . $v);
             }
+            // 1.16: on Apache mod_php the page must say where it ends, so that the work done after
+            // it (notices, the engine) never keeps the browser waiting (Core/Background.php)
+            if ($this->file === null) Background::compatHeaders(strlen($this->body));
         }
         if ($this->file !== null) {
             readfile($this->file);

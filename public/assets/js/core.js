@@ -88,11 +88,26 @@ export function toast(message, { type = 'success', link = null, timeout = 3800 }
   close.type = 'button';
   close.setAttribute('aria-label', 'Cerrar aviso');
   close.textContent = '×';
-  close.onclick = () => el.remove();
+  const gone = () => { el.remove(); if (!box.children.length) try { box.hidePopover?.(); } catch { /* not shown */ } };
+  close.onclick = gone;
   el.appendChild(close);
   box.appendChild(el);
-  setTimeout(() => el.remove(), type === 'error' ? Math.max(timeout, 7000) : timeout);
+  raiseToasts(box);
+  setTimeout(gone, type === 'error' ? Math.max(timeout, 7000) : timeout);
 }
+
+// 1.16 · notices must be visible above an open dialog (confirmations, forms). A modal <dialog> sits in
+// the browser's «top layer», above any z-index, so before 1.16 a notice that arrived while a
+// confirmation was open stayed hidden behind it. The toast box is a popover: showing it again puts it
+// on top of the top layer. Browsers without popovers keep the box as before.
+function raiseToasts(box) {
+  if (typeof box.showPopover !== 'function') return;
+  try {
+    if (box.matches(':popover-open')) box.hidePopover();
+    box.showPopover();
+  } catch { /* not supported */ }
+}
+export { raiseToasts };
 
 // ---------- Motion preference ----------
 export function motionAllowed() {

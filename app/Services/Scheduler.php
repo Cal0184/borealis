@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Borealis\Services;
 
 use Borealis\Core\Auth;
+use Borealis\Core\Background;
 use Borealis\Core\Database;
 use Borealis\Security\Policy;
 use Borealis\Security\Secrets;
@@ -254,26 +255,36 @@ final class Scheduler
         if (Heartbeat::enabled()) {
             $s = Heartbeat::state();
             if (!Heartbeat::alive($s) && (int)$s['attempt'] <= time() - 60) register_shutdown_function(function () {
-                if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-                if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+                Background::detach();
                 Heartbeat::ensure();
             });
         }
+        self::afterResponse('visit');
+    }
+
+    /** Seconds between two runs started by requests (visits, pages left open, devices). */
+    public const REQUEST_EVERY = 120;
+
+    /**
+     * 1.16 · runs the job after the answer, when the last run is older than REQUEST_EVERY. Used by
+     * every page («visit») and by /cron/ping («device»: a service worker that received a notice or
+     * woke up by itself). PHP-FPM, LiteSpeed and Apache (Core/Background.php).
+     */
+    public static function afterResponse(string $source): void
+    {
         $mode = config('cron.web_fallback', true);
         if ($mode === false || self::$hooked) return;
-        if (!function_exists('fastcgi_finish_request') && $mode !== 'always') return;
+        if ($mode !== 'always' && !Heartbeat::serverCan()) return;
         try {
             if (!self::ready()) return;
             $last = Database::get()->value('SELECT last_started_at FROM system_jobs WHERE name = ?', [self::JOB]);
-            if ($last && strtotime($last . ' UTC') > time() - 300) return;
+            if ($last && strtotime($last . ' UTC') > time() - self::REQUEST_EVERY) return;
         } catch (\Throwable) { return; }
         self::$hooked = true;
-        register_shutdown_function(function () {
-            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-            if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
-            ignore_user_abort(true);
+        register_shutdown_function(function () use ($source) {
+            Background::detach();
             @set_time_limit(120);
-            try { self::run('visit'); } catch (\Throwable $e) { error_log('[Borealis] tarea programada: ' . $e->getMessage()); }
+            try { self::run($source); } catch (\Throwable $e) { error_log('[Borealis] tarea programada: ' . $e->getMessage()); }
         });
     }
 }

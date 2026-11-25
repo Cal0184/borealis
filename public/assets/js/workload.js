@@ -1,7 +1,7 @@
 // 1.14 · weekly load of each person, shown where work is assigned: «Ana · 12 de 15 h esta semana».
 // Loaded once per page (and again after a minute) from /api/workload; nothing is shown when the
 // person cannot see others' load.
-import { api, onInit } from './core.js?v=1.15.1';
+import { api, onInit } from './core.js?v=1.16.0';
 
 let cache = null;
 let at = 0;

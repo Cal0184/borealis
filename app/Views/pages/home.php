@@ -22,11 +22,6 @@ $collective = pct($totals['done'], $totals['total']);
   </div>
 </section>
 
-<div class="notice push-nudge row wrap" data-push-nudge hidden>
-  <?= icon('bell', 'sm') ?> <span class="grow">Recibe tus avisos aunque Borealis esté cerrado.</span>
-  <button type="button" class="btn btn--sm btn--primary" data-push-nudge-on>Activar</button>
-  <button type="button" class="btn btn--sm btn--ghost" data-push-nudge-off>Ahora no</button>
-</div>
 <?= partial('capacity-alerts', ['alerts' => \Borealis\Services\CapacityAlerts::forView()]) ?>
 <div class="grid grid-4 stats mb">
   <a class="card stat" href="<?= e(url('/projects')) ?>"><span class="label"><?= icon('folder', 'sm') ?> Proyectos activos</span><span class="value"><?= (int)$project_count ?></span></a>

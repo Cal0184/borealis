@@ -168,7 +168,8 @@ Cómo funciona:
 - HTTPS con certificado válido (Let's Encrypt de HestiaCP sirve). Extensiones `openssl` (con curvas EC) y `curl` de PHP; el servidor debe poder salir por HTTPS a los servicios de notificaciones de los navegadores (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `web.push.apple.com`, `*.notify.windows.com`).
 - Android: Chrome, Edge o Firefox. iPhone/iPad: iOS/iPadOS 16.4 o posterior y abrir Borealis **desde el icono de la pantalla de inicio** (Safari › Compartir › Añadir a pantalla de inicio); en Safari normal iOS no ofrece notificaciones.
 - Opcional en `config/config.php`: `'push' => ['subject' => 'mailto:tu-correo@dominio']` (contacto que ven los servicios de notificaciones; si no, se usa `mail.from`).
-- **Tarea programada** para que lleguen los recordatorios aunque nadie tenga Borealis abierto. HestiaCP › Cron Jobs › Add Cron Job, cada 5 minutos (`*/5`): `cd /home/USUARIO/web/DOMINIO/public_html/borealis && /usr/bin/php8.2 bin/notify.php >> storage/logs/notify.log 2>&1`. Usa la misma versión de PHP que el sitio.
+- **Sin SSH ni cron (1.16):** los avisos llegan con Borealis cerrado sin configurar nada en el servidor (motor interno con PHP-FPM, LiteSpeed o Apache, visitas y `/cron/ping` desde los dispositivos). Para que los recordatorios por hora lleguen a su hora siempre, conviene un servicio externo gratuito que visite `/cron/run?token=…` cada 5 minutos (cron-job.org). Pasos en `docs/CONFIGURACION-1.16.md` y en Administración › Notificaciones.
+- **Tarea programada (si el panel la ofrece)** para que lleguen los recordatorios aunque nadie tenga Borealis abierto. HestiaCP › Cron Jobs › Add Cron Job, cada 5 minutos (`*/5`): `cd /home/USUARIO/web/DOMINIO/public_html/borealis && /usr/bin/php8.2 bin/notify.php >> storage/logs/notify.log 2>&1`. Usa la misma versión de PHP que el sitio.
   - Desde la 1.9 también envía los correos y pone al día Google Calendar.
   - Desde la 1.14, Administración › Notificaciones dice si funciona. Ahí también está la dirección `/cron/run?token=…`, para alojamientos que solo llaman a una URL.
   - Con PHP-FPM, una visita cualquiera también la ejecuta, como respaldo.
@@ -211,6 +212,13 @@ Lo que se probó sin servicios reales: las pruebas usan un servidor local que im
    - desde consola: `php bin/migrate.php` (también crea la copia; `--status` solo informa).
 
 Las migraciones nunca eliminan datos de usuario.
+
+### De 1.15.x a 1.16.0
+
+1. Copia de seguridad.
+2. Sube los archivos por FTP **conservando** `config/config.php` y `storage/`. Si se reemplazara `storage/vapid.json`, habría que volver a activar los dispositivos.
+3. No hay migraciones nuevas.
+4. Abre Administración › Notificaciones: muestra el servidor detectado y el estado del motor. Opcional, pero recomendado: el servicio externo gratuito (`docs/CONFIGURACION-1.16.md` § 2).
 
 ### De 1.14.0 a 1.15.0
 
