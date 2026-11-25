@@ -1,13 +1,22 @@
-# Resultados de pruebas — Borealis 1.16.2
+# Resultados de pruebas — Borealis 1.16.3
 
 Resultados **reales**, generados por las propias pruebas el 25/11/2026. La integración se ejecutó instalando desde el ZIP; el navegador, desde una copia idéntica a él (`git ls-files`). Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1163 | 0 | 1163 |
+| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1190 | 0 | 1190 |
 | Navegador Chromium (`tests/e2e/run.mjs`) | 336 | 0 | 336 |
 | Motor sin cron con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 14 | 0 | 14 |
 | Motor sin cron con Apache + mod_php reales (`SERVER=apache tests/fpm/engine.sh`) | 15 | 0 | 15 |
+
+**Novedades 1.16.3:** 27 comprobaciones nuevas en integración (`tests/integration/v1163.php`), en los grupos «1.16.3 · Eliminar usuarios» y «1.16.3 · Correo al soporte».
+- **Eliminar usuarios:** permisos, confirmación obligatoria y que nadie pueda eliminarse a sí mismo. También la copia de seguridad previa, la tarea y el proyecto que pasan a otra persona, y la tarea terminada y el comentario que se conservan.
+- **Cuenta cerrada:** la sesión se corta, el inicio de sesión se rechaza, queda en el registro maestro y el correo se puede volver a usar.
+- **Correo al soporte:** configuración y permisos, validación, enlace con el asunto y los datos, el menú, la barra lateral y la página de inicio de sesión, y que se oculta sin correo.
+
+**Fallo encontrado por las pruebas y corregido:** en la primera ejecución del navegador fallaron 2 pruebas antiguas. Buscaban una fila de Usuarios por el nombre de la persona y encontraban varias, porque cada fila contenía el cuadro de eliminación con la lista de las demás personas. Los cuadros pasaron fuera de la tabla, y las 336 pruebas pasan sin cambiar ninguna.
+
+**No probado en la 1.16.3:** eliminar a alguien que también usa otros espacios (solo sale de este) y el programa de correo real de cada dispositivo.
 
 **Novedades 1.16.2:** 12 comprobaciones nuevas en integración, en el grupo «1.16.2 · Correo configurado desde Administración»:
 - **Formulario y permisos:** el formulario existe, no se puede usar sin sesión y valida los datos.
