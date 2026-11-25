@@ -1,5 +1,15 @@
 # Cambios
 
+## 1.16.6 (25/11/2026)
+
+**Traslado más seguro a servidores Nginx (gep.uchile.cl).** Sin migraciones.
+
+- **Archivos públicos separados del núcleo:** `public/index.php` lee `nucleo.php` (si existe a su lado) para saber dónde están `app/`, `config/`, `database/` y `storage/`. Así en la carpeta web quedan solo `index.php`, `assets/`, `sw.js` y el manifiesto, y el resto va en una carpeta `nucleo-<32 hex>` con nombre secreto (o fuera de la web, con una ruta absoluta en `nucleo.php`). La dirección queda `https://dominio/borealis` sin `/public`. Sin `nucleo.php`, todo funciona como antes.
+- **`extras/paquete-separado.sh`** arma ese ZIP desde el repositorio (sin `tests/`, `docs/` ni `extras/`).
+- **«Seguridad de la instalación» busca en la dirección correcta** del núcleo: con la estructura separada y también con Nginx y todo subido (dirección terminada en `/public`, que antes se daba por segura sin estarlo). Con el núcleo separado, comprueba además que la dirección de Borealis no liste carpetas.
+- **HSTS:** con HTTPS, el navegador no vuelve a usar HTTP para ese dominio (6 meses, sin subdominios).
+- **`extras/diagnostico.php`:** página de un solo archivo para subir por FTP antes o después del traslado. Revisa PHP, extensiones, permisos, `config.php`, la base de datos (prueba localhost, 127.0.0.1 y el socket, y explica los errores 1045, 1044, 1049 y 2002), si `storage/` o `config.php` se descargan, dónde responde Borealis y los valores de `url`/`base_path`. Se desactiva 3 horas después de abrirla y tiene un botón para borrarse. No va en el ZIP normal.
+
 ## 1.16.5 (25/11/2026)
 
 **Proteger los datos privados sin pedir nada al hosting.** Sin migraciones: se sube por FTP conservando `config/config.php` y `storage/`.

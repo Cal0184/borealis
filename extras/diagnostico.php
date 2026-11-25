@@ -297,7 +297,7 @@ if ($base !== null) {
     if (is_array($cfg) && $rec) {
         $cu = isset($cfg['app']['url']) ? rtrim($cfg['app']['url'], '/') : ''; $cb = isset($cfg['app']['base_path']) ? rtrim($cfg['app']['base_path'], '/') : '';
         $cp = isset($cfg['app']['pretty_urls']) ? (bool)$cfg['app']['pretty_urls'] : true;
-        $same = $cu === $rec['url'] && $cb === $rec['base'] && $cp === $rec['pretty'];
+        $same = $cu === $rec['url'] && $cb === $rec['base'] && ($rec['pretty'] || !$cp); // pretty_urls false sirve siempre
         add($S, $same ? 'ok' : 'bad', $same ? 'La URL de config.php es la correcta' : 'La URL de config.php no corresponde a este servidor', 'Ahora: url «' . $cu . '», base_path «' . $cb . '», pretty_urls ' . ($cp ? 'true' : 'false') . '.');
     }
 }
