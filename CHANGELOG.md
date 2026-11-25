@@ -1,5 +1,24 @@
 # Cambios
 
+## 1.16.3 (25/11/2026)
+
+Arreglo rápido. Sin migraciones: se sube por FTP conservando `config/` y `storage/`.
+
+**Eliminar usuarios** (Administración › Usuarios › menú «⋯» de la persona › «Eliminar usuario»):
+- **Confirmación:** un cuadro muestra cuántas tareas abiertas tiene y cuántos proyectos lidera, pide marcar «Entiendo que no se puede deshacer» y admite un motivo.
+- **Su trabajo no se pierde:** se elige a quién pasan sus tareas abiertas, los proyectos que lidera y su lugar en esos proyectos. También se puede dejarlas sin responsable.
+- **Historial intacto:** comentarios, horas, tareas terminadas y el registro maestro se conservan.
+- **Cuenta:** si no se usa en otro espacio, se cierra. Deja de poder entrar (también su sesión abierta), su nombre pasa a «Usuario eliminado» y su correo queda libre para una cuenta nueva. Además se quitan sus dispositivos, su conexión con Google y sus listas personales. Si usa otros espacios, solo sale de este.
+- **Seguridad:** antes se guarda una copia de seguridad completa (Administración › Datos). Nadie puede eliminarse a sí mismo ni dejar el espacio sin propietario. Hace falta el permiso de administrar usuarios, y no se puede eliminar a alguien con más permisos que uno.
+- **Registro maestro:** queda como «Eliminaciones», con quién, el motivo, el antes y el después.
+
+**Botón «Correo al soporte».** Está en el menú de la cuenta, en la barra lateral y en la página de inicio de sesión, para quien no puede entrar. Abre el programa de correo de la persona con un mensaje listo:
+- el asunto;
+- una pauta («¿Qué pasó? ¿Qué esperabas que pasara?»);
+- los datos que el soporte necesita: quién escribe, el espacio, la página donde estaba, la versión, la fecha y el navegador.
+
+El correo se configura en Administración › Ajustes › Correo al soporte, con el asunto opcional. Sin correo configurado, el botón no aparece. Borealis no envía nada por su cuenta, así que funciona aunque el correo de Borealis no esté configurado. También se puede fijar para toda la instalación en `config.php` con `'support' => ['email' => '…']`.
+
 ## 1.16.2 (25/11/2026)
 
 **Correo sin editar archivos por FTP.** Hasta ahora, activar los correos exigía editar la sección `mail` de `config/config.php`, y sin SSH eso significa descargar el archivo, modificarlo y volver a subirlo.

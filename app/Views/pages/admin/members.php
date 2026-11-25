@@ -29,6 +29,8 @@
               <?php else: ?>
                 <button role="menuitem" data-call="/api/members/<?= $uid ?>" data-method="PATCH" data-body='{"status":"active"}'><?= icon('restore') ?> Reactivar</button>
               <?php endif; ?>
+              <hr>
+              <button role="menuitem" class="danger" data-dialog="dlg-del-<?= $uid ?>"><?= icon('trash') ?> Eliminar usuario</button>
             </div></div>
           <dialog class="modal" id="dlg-edit-<?= $uid ?>" aria-labelledby="de-<?= $uid ?>">
             <form data-api="/api/members/<?= $uid ?>" data-method="PATCH" data-close>
@@ -39,6 +41,27 @@
                 <div class="field"><label for="et-<?= $uid ?>">Cargo</label><input class="input" id="et-<?= $uid ?>" name="title" value="<?= e($m['title']) ?>" maxlength="120" placeholder="Opcional"><span class="error" data-error-for="title"></span></div>
               </div>
               <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--primary" type="submit">Guardar cambios</button></div>
+            </form>
+          </dialog>
+          <?php $imp = $impact[$uid] ?? []; ?>
+          <dialog class="modal" id="dlg-del-<?= $uid ?>" aria-labelledby="dd-<?= $uid ?>">
+            <form data-api="/api/members/<?= $uid ?>/delete" data-close>
+              <div class="modal-head"><h2 id="dd-<?= $uid ?>">Eliminar a <?= e($m['name']) ?></h2><button type="button" class="btn btn--ghost btn--icon" data-close-dialog aria-label="Cerrar"><?= icon('x') ?></button></div>
+              <div class="modal-body"><div class="form-error" data-form-error></div>
+                <p>Sale de este espacio para siempre. Antes se guarda una copia de seguridad completa en Administración › Datos.</p>
+                <ul class="small muted">
+                  <li>Tiene <strong><?= (int)($imp['tasks'] ?? 0) ?></strong> <?= ($imp['tasks'] ?? 0) === 1 ? 'tarea abierta asignada' : 'tareas abiertas asignadas' ?><?= !empty($imp['projects']) ? ' y lidera <strong>' . (int)$imp['projects'] . '</strong> ' . ($imp['projects'] === 1 ? 'proyecto' : 'proyectos') : '' ?>.</li>
+                  <li>Sus comentarios, horas registradas, tareas terminadas y el registro maestro se conservan.</li>
+                  <li>Si su cuenta no se usa en otro espacio, se cierra: no podrá entrar y su nombre pasa a «Usuario eliminado».</li>
+                </ul>
+                <div class="field"><label for="dr-<?= $uid ?>">Pasar su trabajo abierto a</label>
+                  <select class="select" id="dr-<?= $uid ?>" name="reassign_to"><option value="">Nadie: quedan sin responsable</option>
+                    <?php foreach ($members as $o): if ((int)$o['id'] === $uid || $o['status'] !== 'active' || !empty($o['is_ghost'])) continue; ?><option value="<?= (int)$o['id'] ?>"><?= e($o['name']) ?></option><?php endforeach; ?>
+                  </select><span class="hint">Tareas abiertas, proyectos que lidera y su lugar en esos proyectos.</span><span class="error" data-error-for="reassign_to"></span></div>
+                <div class="field"><label for="dm-<?= $uid ?>">Motivo <span class="muted">(opcional, queda en el registro maestro)</span></label><input class="input" id="dm-<?= $uid ?>" name="reason" maxlength="500"></div>
+                <label class="check"><input type="checkbox" name="confirm" value="1" required> Entiendo que no se puede deshacer</label><span class="error" data-error-for="confirm"></span>
+              </div>
+              <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--danger-solid" type="submit"><?= icon('trash', 'sm') ?> Eliminar usuario</button></div>
             </form>
           </dialog>
           <dialog class="modal" id="dlg-pass-<?= $uid ?>" aria-labelledby="dp-<?= $uid ?>">

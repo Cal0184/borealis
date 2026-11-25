@@ -93,6 +93,8 @@ $r->post('/api/ghosts/leave', [Api\GhostApi::class, 'leave']);
 $r->post('/api/ghosts/{id}/enter', [Api\GhostApi::class, 'enter']);
 $r->patch('/api/members/{id}', [Api\WorkspaceApi::class, 'updateMember']);
 $r->post('/api/members/{id}/password', [Api\WorkspaceApi::class, 'resetPassword']);
+$r->post('/api/members/{id}/delete', [Api\WorkspaceApi::class, 'deleteMember']);
+$r->patch('/api/support/settings', [Api\WorkspaceApi::class, 'supportSettings']);
 $r->post('/api/invitations', [Api\WorkspaceApi::class, 'invite']);
 $r->delete('/api/invitations/{id}', [Api\WorkspaceApi::class, 'revokeInvite']);
 $r->post('/api/invitations/{id}/renew', [Api\WorkspaceApi::class, 'renewInvite']);

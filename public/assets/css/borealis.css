@@ -1779,3 +1779,10 @@ code.copyable { word-break: break-all; }
 .ts-props dd.ts-due .ts-time { max-width: none; width: 100%; padding-left: 6px; padding-right: 4px; }
 .ts-props dd.ts-due .ts-late { grid-column: 1 / -1; }
 .ts-props dd.ts-suggest, .ts-props dd.ts-suggest .link-btn { text-align: left; }
+
+/* 1.16.3 · «Correo al soporte» in the sidebar */
+.nav-support { text-decoration: none; }
+html[data-nav="compact"] .nav-support .icon { transform: none; }
+.auth-support { margin-top: 14px; text-align: center; font-size: 13px; }
+/* dialogs that live inside a table's actions cell (Administración › Usuarios) read normally */
+td dialog.modal { text-align: left; white-space: normal; }
