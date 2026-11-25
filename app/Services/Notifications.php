@@ -117,6 +117,10 @@ final class Notifications
                 // notice of the night without the person having chosen it)
                 'quiet' => ['on' => array_key_exists('on', $q) ? !empty($q['on']) : false, 'from' => $hm($q['from'] ?? null, '22:00'), 'to' => $hm($q['to'] ?? null, '07:00')],
                 'timezone' => UserTime::valid($raw['timezone'] ?? null) ? $raw['timezone'] : null,
+                // 1.16.1: sound (system sound of the device, and a short chime inside an open page) and
+                // important notices (assignments, due, overdue, alerts) that stay on screen until closed
+                'sound' => array_key_exists('sound', $n) ? !empty($n['sound']) : true,
+                'sticky' => array_key_exists('sticky', $n) ? !empty($n['sticky']) : true,
             ];
         }
         return self::$prefsCache[$userId];
@@ -161,7 +165,9 @@ final class Notifications
         if ($tz !== '' && !UserTime::valid($tz)) throw HttpException::invalid(['timezone' => 'Zona horaria no válida.']);
         $n = ['v' => 116, 'off' => array_values(array_diff($cats, $on)), 'push' => $yes($input['push'] ?? false),
             'push_off' => array_values(array_diff($cats, $pushOn)), 'lead' => $cur['lead'], 'before' => $before, 'weekly' => in_array('weekly', $on, true),
-            'email' => array_key_exists('email', $input) ? $yes($input['email']) : $cur['email'], 'email_off' => array_values(array_diff($cats, $emailOn)), 'quiet' => $quiet];
+            'email' => array_key_exists('email', $input) ? $yes($input['email']) : $cur['email'], 'email_off' => array_values(array_diff($cats, $emailOn)), 'quiet' => $quiet,
+            'sound' => !empty($input['has_sound']) ? $yes($input['sound'] ?? false) : $cur['sound'],
+            'sticky' => !empty($input['has_sound']) ? $yes($input['sticky'] ?? false) : $cur['sticky']];
         $prefs = Auth::user()['prefs'] ?? [];
         $prefs['notify'] = $n;
         if ($tz === '' || $tz === UserTime::installZone()) unset($prefs['timezone']); else $prefs['timezone'] = $tz;

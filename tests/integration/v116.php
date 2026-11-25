@@ -13,7 +13,7 @@ $cnt = fn(string $sql, array $p = []) => (int)$q($sql, $p)->fetchColumn();
 $read = fn(string $f) => (string)file_get_contents($root . '/' . $f);
 
 group('1.16 · Avisos con Borealis cerrado en cualquier alojamiento');
-check('Versión 1.16.0', str_contains($read('app/bootstrap.php'), "'1.16.0'"));
+check('Versión 1.16.x', str_contains($read('app/bootstrap.php'), "'1.16."));
 $bg = $read('app/Core/Background.php');
 check('El trabajo tras responder funciona con PHP-FPM, LiteSpeed y Apache (no solo PHP-FPM)', str_contains($bg, 'fastcgi_finish_request') && str_contains($bg, 'litespeed_finish_request') && str_contains($bg, 'ignore_user_abort') && str_contains($read('app/Services/Push.php'), 'Background::detach()') && str_contains($read('app/Services/Scheduler.php'), 'Background::detach()') && !str_contains($read('app/Services/Scheduler.php'), "!function_exists('fastcgi_finish_request')"));
 $anon = new Client($BASE);
@@ -99,6 +99,36 @@ exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/notify.php'
 (new Client($BASE))->request('POST', '/cron/ping?src=push');
 usleep(500000);
 check('Nada se envía dos veces: otra ejecución de la tarea o de un dispositivo no repite avisos', count(array_filter($fsGet16(), fn($r) => $r['path'] === '/push/valentina')) === $before);
+
+// 1.16.1 · sound, notices that stay on screen, test with Borealis closed, list of devices
+group('1.16.1 · Sonido, avisos que se quedan y prueba con Borealis cerrado');
+$pj16 = json_decode((string)$plain16, true) ?: [];
+check('Una asignación va con sonido y se queda en pantalla hasta cerrarla (por defecto)', ($pj16['silent'] ?? null) === false && ($pj16['sticky'] ?? null) === true, (string)$plain16);
+$admin->api('POST', '/api/push/subscription', ['endpoint' => "$fs16/push/admin-pc", 'p256dh' => $b64($uaPub), 'auth' => $b64($uaAuth), 'device' => 'Edge · Windows']);
+$t0 = microtime(true);
+$admin->api('POST', '/api/push/test', ['delay' => 2]);
+$took = microtime(true) - $t0;
+$early = array_filter($fsGet16(), fn($r) => $r['path'] === '/push/admin-pc');
+check('«Probar con Borealis cerrado» responde enseguida y pide cerrar Borealis', $admin->status === 200 && str_contains((string)($admin->json()['message'] ?? ''), 'Cierra Borealis') && !$early && $took < 1.8, snippet($admin) . " $took");
+usleep(3500000);
+$late = array_values(array_filter($fsGet16(), fn($r) => $r['path'] === '/push/admin-pc'));
+$plainT = $late ? (string)$decrypt(base64_decode($late[0]['body'])) : '';
+check('…y la prueba llega después, sin ninguna página esperando', str_contains($plainT, 'Borealis cerrado'), $plainT);
+$admin->api('PATCH', '/api/profile/notifications', ['in_app' => ['assigned', 'due', 'overdue'], 'push' => '1', 'push_cats' => ['assigned'], 'has_sound' => '1']);
+$admin->get('/profile');
+check('Se puede quitar el sonido y que no se queden en pantalla (se guarda)', !preg_match('~name="sound" value="1" checked~', $admin->body) && !preg_match('~name="sticky" value="1" checked~', $admin->body) && str_contains($admin->body, 'name="borealis-sound" content="0"'), snippet($admin));
+check('El perfil lista cada dispositivo con su última entrega', str_contains($admin->body, 'data-devices') && str_contains($admin->body, 'Edge · Windows') && str_contains($admin->body, 'última entrega'), snippet($admin));
+$admin->api('POST', '/api/push/test');
+usleep(500000);
+$quiet = array_values(array_filter($fsGet16(), fn($r) => $r['path'] === '/push/admin-pc'));
+$pq = json_decode((string)$decrypt(base64_decode(end($quiet)['body'])), true) ?: [];
+check('…y entonces los avisos llegan sin sonido', ($pq['silent'] ?? null) === true && ($pq['sticky'] ?? null) === false, json_encode($pq));
+$admin->api('PATCH', '/api/profile/notifications', ['in_app' => ['assigned', 'due', 'overdue'], 'push' => '1', 'push_cats' => ['assigned', 'due', 'overdue'], 'has_sound' => '1', 'sound' => '1', 'sticky' => '1']);
+$admin->api('POST', '/api/push/unsubscribe', ['endpoint' => "$fs16/push/admin-pc"]);
+$sw16 = $read('public/sw.js');
+check('El service worker muestra el aviso con sonido, «quedarse en pantalla» y vibración, y si el navegador rechaza una opción lo muestra igual', str_contains($sw16, 'requireInteraction: !!n.sticky') && str_contains($sw16, 'silent: !!n.silent') && str_contains($sw16, 'renotify: true') && str_contains($sw16, 'vibrate') && str_contains($sw16, 'try { await show(n); } catch'));
+check('Con Borealis abierto suena un tono corto (si la persona no quitó el sonido)', str_contains($read('public/assets/js/notify-live.js'), 'function chime()'));
+
 file_put_contents($cfgPath16, $cfgOrig16);
 usleep(3200000);
 proc_terminate($fsProc16);

@@ -203,16 +203,30 @@ final class Push
         return in_array($n['type'], ['overdue', 'due', 'assigned'], true) ? 'high' : 'normal';
     }
 
+    /** 1.16.1 · notices important enough to stay on screen until the person closes them. */
+    public const STICKY_TYPES = ['assigned', 'due', 'overdue', 'monitor'];
+
     public static function payload(array $n): string
     {
         return json_encode(['title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'], 'url' => $n['url'] ?: url('/notifications'),
-            'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']] + self::attention((int)($n['user_id'] ?? 0), (string)$n['type']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private static function groupPayload(int $count, array $last): string
     {
         return json_encode(['title' => 'Borealis', 'body' => $count . ' avisos nuevos: ' . mb_substr($last['message'], 0, 120) . '…', 'url' => url('/notifications'),
-            'tag' => 'borealis-grupo', 'id' => (int)$last['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            'tag' => 'borealis-grupo', 'id' => (int)$last['id']] + self::attention((int)($last['user_id'] ?? 0), 'assigned'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * 1.16.1 · how the device shows it: with sound (the system sound; browsers do not allow a sound of
+     * their own) unless the person turned sound off, and, for important notices, on screen until
+     * closed. The service worker reads these fields.
+     */
+    public static function attention(int $userId, string $type): array
+    {
+        $p = $userId ? Notifications::prefs($userId) : ['sound' => true, 'sticky' => true];
+        return ['silent' => !$p['sound'], 'sticky' => $p['sticky'] && in_array($type, self::STICKY_TYPES, true)];
     }
 
     /** One notice to one device, recorded once in notification_deliveries (when the 1.14 table exists). */

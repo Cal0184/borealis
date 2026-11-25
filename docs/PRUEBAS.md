@@ -1,13 +1,22 @@
-# Resultados de pruebas — Borealis 1.16.0
+# Resultados de pruebas — Borealis 1.16.1
 
 Resultados **reales**, generados por las propias pruebas el 25/11/2026. La integración se ejecutó instalando desde el ZIP; el navegador, desde una copia idéntica a él (`git ls-files`). Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1143 | 0 | 1143 |
+| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1151 | 0 | 1151 |
 | Navegador Chromium (`tests/e2e/run.mjs`) | 336 | 0 | 336 |
 | Motor sin cron con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 14 | 0 | 14 |
 | Motor sin cron con Apache + mod_php reales (`SERVER=apache tests/fpm/engine.sh`) | 15 | 0 | 15 |
+
+**Novedades 1.16.1:** 8 comprobaciones nuevas en integración, en el grupo «1.16.1 · …»:
+- **Asignación:** va con sonido y se queda en pantalla.
+- **«Probar con Borealis cerrado»:** responde enseguida y la prueba llega después.
+- **Sin sonido:** se puede quitar el sonido, y los avisos llegan entonces silenciosos.
+- **Perfil:** lista cada dispositivo con su última entrega.
+- **Service worker:** las opciones de sonido y «quedarse en pantalla», y la versión simple si el navegador rechaza una opción.
+
+El navegador sigue en 336/336 con la 1.16.1. Las pruebas reales con Nginx y Apache son de la 1.16.0; la 1.16.1 no toca el motor.
 
 **Novedades 1.16:**
 - **Integración:** grupos «1.16 · …» (`tests/integration/v116.php`, 21 comprobaciones). Cubren `/cron/ping` sin sesión y sus límites, el modo compatible de Apache, las preferencias por defecto y su paso desde 1.15, la asignación y el cambio de fecha que llegan cifrados con la sesión terminada, que nada se repite y la pantalla de Administración.

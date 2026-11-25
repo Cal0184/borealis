@@ -10,7 +10,7 @@
 //  - new notices show as a toast only when this device does not get system notifications (to avoid
 //    showing the same notice twice); the badge always updates;
 //  - the service worker asks the page whether it has unsaved changes before following a notice.
-import { appUrl, meta, toast } from './core.js?v=1.16.0';
+import { appUrl, meta, toast } from './core.js?v=1.16.1';
 
 const POLL_MS = 60000;
 let latest = null;
@@ -59,9 +59,29 @@ export async function check(force = false) {
     paint(d.unread || 0);
     if (latest !== null && d.items?.length && !systemNotices()) {
       for (const n of d.items.slice(0, 2).reverse()) toast(`${n.title}: ${n.body}`, { link: { href: n.url, label: 'Ver' }, timeout: 8000 });
+      chime();
     }
     latest = Math.max(latest || 0, d.latest || 0);
   } catch { /* offline: the 'online' event tries again */ } finally { busy = false; }
+}
+
+// 1.16.1 · a short two-note chime for a new notice shown inside an open page (the system
+// notification already has the device's own sound). Off when the person turned sound off. Browsers
+// only allow it after the person has clicked or typed on the page once; otherwise it stays silent.
+let audio = null;
+function chime() {
+  if (meta('borealis-sound') !== '1') return;
+  try {
+    audio ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    const t = audio.currentTime;
+    [[880, 0], [1318.5, 0.13]].forEach(([f, d]) => {
+      const o = audio.createOscillator(); const g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.18, t + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.35);
+      o.connect(g).connect(audio.destination); o.start(t + d); o.stop(t + d + 0.4);
+    });
+  } catch { /* no audio here */ }
 }
 
 function schedule() {

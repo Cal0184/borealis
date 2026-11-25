@@ -1,6 +1,6 @@
 // 1.15 · Sidebar groups, compact sidebar, favorites and the quick search's «recent» list.
 // Preferences are saved to the person's profile (they follow them to other devices).
-import { api, appUrl, toast } from './core.js?v=1.16.0';
+import { api, appUrl, toast } from './core.js?v=1.16.1';
 
 let saveTimer = null;
 function savePrefs(body) {

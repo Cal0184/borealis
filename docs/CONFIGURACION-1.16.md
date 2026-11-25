@@ -68,3 +68,13 @@ Cuando el servicio externo funciona, el motor interno se pone en reposo solo, y 
 2. Sube el contenido del ZIP **sin** borrar ni reemplazar `config/config.php` ni la carpeta `storage/` del servidor. Esa carpeta guarda las claves de notificaciones: si se reemplazara, los dispositivos tendrían que activarse otra vez.
 3. Entra como administración. La 1.16 no tiene migraciones nuevas.
 4. Abre Administración › Notificaciones y revisa «Servidor» y el estado del motor.
+
+## 7. «Se entregó» pero no lo vi (1.16.1)
+
+1. **Perfil › Notificaciones › «Dispositivos que reciben tus avisos»:** revisa que aparezca el navegador y el equipo donde esperas el aviso, con una «última entrega» reciente. Si figura un navegador que ya no usas, el aviso se entrega allí.
+2. **«Probar con Borealis cerrado (30 s)»:** pulsa el botón y cierra todas las pestañas de Borealis, sin cerrar el navegador. A los 30 segundos debe aparecer el aviso del sistema.
+3. **Si no aparece:**
+   - **Windows:** Configuración › Sistema › Notificaciones. Activa Google Chrome o Microsoft Edge (o Borealis, si lo instalaste como aplicación) y revisa que estén permitidos los banners y el sonido. Desactiva «No molestar» o el Asistente de concentración, o añade el navegador a sus prioridades.
+   - **Chrome:** en `chrome://settings/content/notifications`, tu dominio debe estar en «Pueden enviar notificaciones». En Configuración › Sistema conviene activar «Seguir ejecutando aplicaciones en segundo plano al cerrar Google Chrome»: así llegan incluso con todas las ventanas cerradas.
+   - **Edge:** en `edge://settings/content/notifications`, lo mismo. En Sistema y rendimiento, activa «Seguir ejecutando extensiones y aplicaciones en segundo plano».
+4. **Sonido:** Perfil › Notificaciones › «Con sonido». El sonido es el de notificaciones del sistema; en Windows se cambia o se activa en Configuración › Sistema › Notificaciones › (navegador) › «Reproducir un sonido».

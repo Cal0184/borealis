@@ -9,7 +9,7 @@
 //   3. the server keeps the step in the person's preferences, to resume another day or device.
 // While it is open, a transparent layer covers the page: clicks cannot change real data, only the
 // tutorial's own buttons work. Anterior, Siguiente, Omitir and Reiniciar are always available.
-import { api, appUrl } from './core.js?v=1.16.0';
+import { api, appUrl } from './core.js?v=1.16.1';
 
 const html = document.documentElement;
 const project = Number(html.dataset.tourProject) || 0;

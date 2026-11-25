@@ -1,7 +1,7 @@
 // Mobile and desktop notifications (1.8) with the browser's standard Web Push.
 // Registers the service worker (sw.js, needed also to install Borealis on the Home Screen),
 // asks for permission only when the person presses «Activar», and keeps the server informed.
-import { api, basePath, onInit, toast } from './core.js?v=1.16.0';
+import { api, basePath, onInit, toast } from './core.js?v=1.16.1';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -155,6 +155,7 @@ document.addEventListener('click', (e) => {
   if (!box) return;
   if (e.target.closest('[data-push-on]')) enable(box);
   else if (e.target.closest('[data-push-off]')) disable(box);
+  else if (e.target.closest('[data-push-test-closed]')) api('/api/push/test', { body: { delay: 30 } }).then((d) => toast(d.message, { timeout: 12000 })).catch((err) => toast(err.message, { type: 'error' }));
   else if (e.target.closest('[data-push-test]')) api('/api/push/test').then((d) => toast(d.message)).catch((err) => toast(err.message, { type: 'error' }));
 });
 function paintAll(root = document) {

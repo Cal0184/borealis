@@ -10,6 +10,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <meta name="base-path" content="<?= e(rtrim((string)config('app.base_path', ''), '/')) ?>">
+<meta name="borealis-sound" content="<?= !empty($s['user']['id']) && \Borealis\Services\Notifications::prefs((int)$s['user']['id'])['sound'] ? '1' : '0' ?>">
 <meta name="pretty-urls" content="<?= config('app.pretty_urls', true) ? '1' : '0' ?>">
 <title><?= e(($title ?? 'Borealis') . ' · ' . $s['workspace']['name']) ?></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23142820'/%3E%3Cpath d='M12 4 7 11h2.5L6 16h4.5v4h3v-4H18l-3.5-5H17z' fill='%2310B981'/%3E%3C/svg%3E">

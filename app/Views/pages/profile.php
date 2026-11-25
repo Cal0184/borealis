@@ -119,18 +119,32 @@
           <div class="row wrap">
             <button type="button" class="btn btn--primary btn--sm" data-push-on hidden><?= icon('bell', 'sm') ?> Activar en este dispositivo</button>
             <button type="button" class="btn btn--sm" data-push-test hidden><?= icon('play', 'sm') ?> Enviar una prueba</button>
+            <button type="button" class="btn btn--sm" data-push-test-closed<?= $devices ? '' : ' hidden' ?>><?= icon('clock', 'sm') ?> Probar con Borealis cerrado (30 s)</button>
             <button type="button" class="btn btn--ghost btn--sm" data-push-off hidden>Desactivar en este dispositivo</button>
           </div>
           <input type="hidden" name="push" value="<?= $np['push'] ? '1' : '0' ?>" data-push-flag>
+          <input type="hidden" name="has_sound" value="1">
+          <label class="check"><input type="checkbox" name="sound" value="1"<?= checked($np['sound']) ?> data-pref-sound> Con sonido <span class="muted small">(el sonido de avisos del sistema; con Borealis abierto, además, un tono corto)</span></label>
+          <label class="check"><input type="checkbox" name="sticky" value="1"<?= checked($np['sticky']) ?>> Asignaciones, vencimientos y alertas se quedan en pantalla hasta cerrarlos</label>
           <details class="more-options" data-push-cats<?= $np['push'] ? '' : ' hidden' ?>><summary><?= icon('settings', 'sm') ?> Qué avisos llegan al móvil</summary>
             <?php foreach (\Borealis\Services\Notifications::CATEGORIES as $k => [$lbl]): ?>
               <label class="check"><input type="checkbox" name="push_cats[]" value="<?= $k ?>"<?= checked(!in_array($k, $np['push_off'], true)) ?>> <?= e($lbl) ?></label>
             <?php endforeach; ?>
           </details>
           <?php $job = \Borealis\Services\Scheduler::status(); if (in_array($job['state'], ['never', 'stale'], true)): ?>
-            <p class="small notice" data-push-job="<?= e($job['state']) ?>"><?= icon('alert', 'sm') ?> El servidor de Borealis aún no envía avisos por su cuenta: hasta que la administración active la tarea programada, los recordatorios llegan cuando alguien usa Borealis.</p>
+            <p class="small notice" data-push-job="<?= e($job['state']) ?>"><?= icon('alert', 'sm') ?> La tarea programada de avisos todavía no se ejecutó en este servidor: los recordatorios por hora pueden llegar tarde. La administración puede revisarlo en Administración › Notificaciones.</p>
           <?php endif; ?>
-          <?php if ($devices): ?><p class="small muted">Dispositivos con avisos: <?= count($devices) ?><?= $devices[0]['last_error'] ? ' · último problema: ' . e($devices[0]['last_error']) : '' ?></p><?php endif; ?>
+          <?php if ($devices): ?>
+            <?php /* 1.16.1: each device with its last delivery, so «sent» can be matched to a real device */ ?>
+            <p class="small muted mt">Dispositivos que reciben tus avisos:</p>
+            <ul class="small device-list" data-devices>
+              <?php foreach ($devices as $dv): ?>
+                <li><strong><?= e($dv['device'] ?: 'Dispositivo') ?></strong> · activado <?= e(fmt_datetime($dv['created_at'])) ?> ·
+                  <?= $dv['last_ok_at'] ? 'última entrega ' . e(fmt_datetime($dv['last_ok_at'])) : 'sin entregas todavía' ?><?= $dv['last_error'] ? ' · problema: ' . e($dv['last_error']) : '' ?></li>
+              <?php endforeach; ?>
+            </ul>
+            <p class="hint">«Entregado» significa que el servicio del navegador (Google, Microsoft, Mozilla o Apple) recibió el aviso. Ese servicio lo muestra cuando el navegador está en marcha; si el navegador está cerrado del todo, aparece al abrirlo. En Windows, el Asistente de concentración o «No molestar» lo guardan en el centro de notificaciones sin mostrarlo ni sonar.</p>
+          <?php endif; ?>
         </div>
         <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar notificaciones</button></div>
       </form>

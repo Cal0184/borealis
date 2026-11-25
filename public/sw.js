@@ -2,7 +2,7 @@
 // It does NOT cache pages, data or files of Borealis: after an update the browser always gets the new
 // version, and nothing private (projects, sessions, people) is ever stored on the device. The only
 // thing kept is the static «Sin conexión» page, shown when a page cannot be loaded at all.
-const VERSION = '1.16.0';
+const VERSION = '1.16.1';
 const scope = self.registration.scope; // e.g. https://example.org/borealis/
 const OFFLINE = 'borealis-offline-' + VERSION;
 
@@ -36,17 +36,28 @@ self.addEventListener('push', (event) => {
     try { const d = event.data?.json(); if (d?.body) items = [d]; } catch { /* no content */ }
     items ??= await pending();
     for (const n of items.slice(0, 3)) {
-      await self.registration.showNotification(n.title || 'Borealis', {
-        body: n.body, tag: n.tag || `borealis-${n.id || Date.now()}`, renotify: false,
-        icon: new URL('assets/img/app-192.png', scope).href, badge: new URL('assets/img/app-badge.png', scope).href,
-        data: { url: n.url || new URL('notifications', scope).href, v: VERSION },
-      });
+      try { await show(n); } catch {
+        // a browser that rejects an option still shows the notice, plainly
+        await self.registration.showNotification(n.title || 'Borealis', { body: n.body, tag: n.tag, data: { url: n.url || new URL('notifications', scope).href, v: VERSION } });
+      }
     }
     // 1.15: open pages update their bell at once (notify-live.js), whatever they are showing
     for (const w of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) w.postMessage({ type: 'borealis-push' });
     await ping('push');
   })());
 });
+
+// 1.16.1: with sound (the device's system sound) unless the person turned it off; important notices
+// stay on screen until closed; a notice that replaces another one with the same tag alerts again.
+function show(n) {
+  return self.registration.showNotification(n.title || 'Borealis', {
+    body: n.body, tag: n.tag || `borealis-${n.id || Date.now()}`, renotify: true,
+    silent: !!n.silent, requireInteraction: !!n.sticky, timestamp: Date.now(),
+    ...(n.silent ? {} : { vibrate: [200, 100, 200] }),
+    icon: new URL('assets/img/app-192.png', scope).href, badge: new URL('assets/img/app-badge.png', scope).href,
+    data: { url: n.url || new URL('notifications', scope).href, v: VERSION },
+  });
+}
 
 // 1.16 · «somebody is around»: tells Borealis to keep its notification engine and scheduled job
 // running (cron/ping, no session, no data). Called when this device receives a notice and when the

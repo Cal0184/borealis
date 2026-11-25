@@ -1,5 +1,18 @@
 # Cambios
 
+## 1.16.1 (25/11/2026)
+
+Sin migraciones. Va en el mismo PR que la 1.16.0.
+
+**Un aviso que figura como «entregado» pero no aparece.** «Entregado» significa que el servicio del navegador (Google, Microsoft, Mozilla o Apple) aceptó el aviso. Lo muestra el navegador del dispositivo cuando está en marcha. En Windows, el Asistente de concentración o «No molestar» lo guarda en el centro de notificaciones, sin mostrarlo ni sonar. Para ver dónde se corta:
+- **Perfil › Notificaciones:** lista cada dispositivo con la fecha de activación, la última entrega y el último problema. Antes solo se veía cuántos había.
+- **«Probar con Borealis cerrado (30 s)»:** el servidor responde enseguida y envía la prueba 30 segundos después, así se puede cerrar todo y comprobar que llega desde el sistema.
+- **Más robusto:** si el navegador rechaza una opción de la notificación, el service worker la muestra igual, en versión simple.
+
+**Sonido y avisos que se quedan en pantalla** (Perfil › Notificaciones, ambos activados por defecto):
+- **«Con sonido»:** el aviso suena con el sonido de notificaciones del dispositivo y vibra en Android. Un aviso que reemplaza a otro vuelve a sonar. Con Borealis abierto y sin notificaciones del sistema, suena además un tono corto dentro de la página. Los navegadores no permiten un sonido propio en las notificaciones del sistema, así que se usa el del dispositivo.
+- **Asignaciones, vencimientos, vencidas y alertas de monitoreo:** se quedan en pantalla hasta cerrarlos (`requireInteraction`), en Windows, macOS, Linux y ChromeOS.
+
 ## 1.16.0 (25/11/2026)
 
 Avisos con Borealis cerrado en un alojamiento administrado solo por FTP, sin SSH ni cron. No tiene migraciones nuevas. Guía: `docs/CONFIGURACION-1.16.md`. Auditoría y causas: `docs/INFORME-1.16.md`.
