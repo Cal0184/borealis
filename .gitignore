@@ -11,3 +11,6 @@
 /storage/uploads/*
 !/storage/uploads/.gitkeep
 /tests/e2e/screenshots/
+/config/storage.php
+/storage-*/
+!/storage/index.html

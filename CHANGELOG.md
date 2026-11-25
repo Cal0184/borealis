@@ -1,5 +1,18 @@
 # Cambios
 
+## 1.16.5 (25/11/2026)
+
+**Proteger los datos privados sin pedir nada al hosting.** Sin migraciones: se sube por FTP conservando `config/config.php` y `storage/`.
+
+En servidores que ignoran los `.htaccess` (Nginx) con Borealis subido entero a la carpeta web, `storage/` (llave de cifrado, copias, archivos, correo) se podía descargar. Ahora, en Administración › Datos › «Seguridad de la instalación»:
+
+- **«Proteger ahora»:** hace una copia de la base de datos, mueve la carpeta de datos privados **fuera de la carpeta web** (al lado de `public_html`, si PHP puede escribir allí) o, si no se puede, a una carpeta `storage-…` con un nombre secreto de 32 caracteres; renueva la llave de cifrado y vuelve a comprobar. El lugar nuevo queda en `config/storage.php` (un archivo PHP: desde la web no muestra nada). En `storage/` quedan solo `.htaccess` e `index.html`.
+- **Llave nueva:** todo lo cifrado con la anterior (tokens de Google, webhooks de Discord y GitHub, contraseña del correo, dirección de `/cron/run`, clave de los avisos push) se cifra de nuevo. La dirección de `/cron/run` y los dispositivos con avisos siguen funcionando. Los ids de los eventos exportados a Google Calendar usan la llave anterior (`ids.key`) para no duplicar eventos. Los enlaces de «¿Olvidaste tu contraseña?» ya enviados dejan de valer. Si la llave está en `config/config.php` (instalaciones desde 1.16.4), no se ofrece: esa llave nunca estuvo expuesta.
+- **Comprobación más precisa:** busca el archivo de prueba donde estén ahora los datos, comprueba que `config/config.php` no se entregue como texto y, con nombre secreto, que la dirección de Borealis no liste sus carpetas. Que se pueda leer `database/` (solo código) ya no se marca en rojo: se menciona aparte.
+- **Si falta la carpeta indicada** en `config/storage.php` (por ejemplo, tras cambiar de servidor), Borealis usa `storage/` y lo avisa en rojo.
+- `.htaccess` y el ejemplo de Nginx del README bloquean también `storage-…`.
+- **Pruebas inofensivas desde la web:** los archivos de `tests/` terminan sin hacer nada si alguien los abre desde internet (como ya hacían los de `bin/`). Antes, el servidor SMTP de prueba podía dejar ocupado un proceso del servidor.
+
 ## 1.16.4 (25/11/2026)
 
 Arreglos de la auditoría externa (`docs/AUDITORIA-EXTERNA.md`). Sin migraciones: se sube por FTP conservando `config/config.php` y `storage/`.

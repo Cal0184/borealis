@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli') exit(1); // 1.16.5: never runs when requested from the web
 
 /*
  * Borealis 1.10 — integration checks: links of a task to its Google Drive folder and GitHub repository.

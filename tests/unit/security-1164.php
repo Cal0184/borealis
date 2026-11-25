@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli') exit(1); // 1.16.5: never runs when requested from the web
 /*
  * 1.16.4 (audit fixes), without a server or database:
  *   php tests/unit/security-1164.php      → prints one JSON line {"ok":bool,"checks":[...]}

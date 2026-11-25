@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli') exit(1); // 1.16.5: never runs when requested from the web
 
 /*
  * Borealis 1.16 — notifications with Borealis closed on a hosting managed only by FTP: work after
@@ -185,7 +186,10 @@ $admin->api('POST', '/api/mail/test');
 $m1 = $mails16();
 check('Con un servidor que funciona, el correo de prueba sale con la contraseña guardada', $admin->status === 200 && count($m1) === 1 && str_contains((string)($m1[0]['text'] ?? json_encode($m1[0])), 'correo de prueba'), snippet($admin) . ' ' . count($m1));
 $admin->api('POST', "/api/projects/$pS/tasks", ['title' => 'Asignada con correo al instante', 'assignee_id' => $val]);
-usleep(1500000);
+// the mail goes out after the answer is sent: wait for it (up to 10 s on a slow machine) instead of a fixed 1.5 s
+$toVal = []; $deadline16 = microtime(true) + 10;
+do { usleep(300000); $toVal = array_filter($mails16(), fn($m) => str_contains((string)json_encode($m, JSON_UNESCAPED_UNICODE), 'Asignada con correo al instante')); } while (!$toVal && microtime(true) < $deadline16);
+usleep(500000); // and a moment more, so that a duplicate would show
 $toVal = array_filter($mails16(), fn($m) => str_contains((string)json_encode($m, JSON_UNESCAPED_UNICODE), 'Asignada con correo al instante'));
 check('La asignación llega por correo al instante, sin esperar la tarea programada', count($toVal) === 1, (string)count($mails16()));
 exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/notify.php') . ' 2>&1');

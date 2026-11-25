@@ -31,12 +31,12 @@ final class MailSettings
 
     private static function file(): string
     {
-        return BASE_PATH . '/storage/mail.json';
+        return storage_path('mail.json');
     }
 
     private static function statusFile(): string
     {
-        return BASE_PATH . '/storage/mail-status.json';
+        return storage_path('mail-status.json');
     }
 
     /** 'config' (config/config.php), 'admin' (saved here) or 'none'. */

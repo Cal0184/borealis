@@ -1,4 +1,4 @@
-# Borealis 1.16.4
+# Borealis 1.16.5
 
 Borealis organiza equipos, proyectos y tareas. Empieza simple (un proyecto solo necesita nombre y una tarea solo título) y crece por módulos cuando el equipo lo necesita: backlog, sprints, calendario, estimaciones, épicas, documentación, reportes y cronograma.
 
@@ -32,6 +32,7 @@ Se recomienda HTTPS: la cookie de sesión se marca como `Secure` automáticament
    - **Recomendado:** la raíz web (DocumentRoot) en la carpeta `public/`.
    - **Hospedaje compartido sin control del DocumentRoot:** sube todo a la raíz; el `.htaccess` incluido redirige a `public/` y bloquea `app/`, `config/`, `storage/`, `database/`, `bin/` y `tests/`.
      **Esto solo funciona con Apache o LiteSpeed.** Nginx ignora los `.htaccess`: con Nginx la raíz web **debe** ser `public/`, o bloquear esas carpetas en su configuración (ejemplo abajo). Desde 1.16.4, Administración › Datos › «Seguridad de la instalación» comprueba sola si `storage/` se puede descargar y muestra una alerta roja si es así. Compruébalo también a mano: `https://TU-DOMINIO/storage/.htaccess` debe responder 403 o 404.
+     **Sin poder cambiar el servidor (1.16.5):** en esa misma alerta, el botón **Proteger ahora** mueve los datos privados (llave, copias, archivos, correo) fuera de la carpeta web —o, si PHP no puede escribir allí, a una carpeta `storage-…` con nombre secreto—, renueva la llave de cifrado y vuelve a comprobar. El lugar nuevo queda en `config/storage.php`; al actualizar por FTP conserva ese archivo y esa carpeta. Al cambiar de servidor, la copia completa (Administración › Datos) ya incluye esos datos.
 5. Abre la URL en el navegador. El instalador:
    - verifica requisitos,
    - prueba la conexión a la base,
@@ -56,7 +57,7 @@ location ~ \.php$ { include fastcgi_params; fastcgi_param SCRIPT_FILENAME $docum
 Si con Nginx no se puede cambiar la raíz a `public/` (todo subido a la raíz del sitio), bloquea las carpetas privadas:
 
 ```nginx
-location ~ ^/(app|config|database|storage|bin|tests|docs)(/|$) { deny all; return 404; }
+location ~ ^/(app|config|database|storage|storage-[a-f0-9]+|bin|tests|docs)(/|$) { deny all; return 404; }
 location ~ /\. { deny all; return 404; }
 ```
 

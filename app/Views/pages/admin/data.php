@@ -3,13 +3,28 @@
 <?php if ($instanceAdmin && $security): $ex = $security['exposure']; ?>
 <section class="card mb" id="seguridad"><div class="card-head"><h2><?= icon('shield') ?> Seguridad de la instalación</h2>
   <button class="btn btn--sm" data-call="/api/admin/exposure-check"><?= icon('restore', 'sm') ?> Comprobar ahora</button></div><div class="card-body">
+  <?php $place = \Borealis\Services\StorageMover::placement(); $missing = \Borealis\Core\StoragePath::missing(); ?>
+  <?php if ($missing !== null): ?>
+    <div class="notice notice--danger" role="alert"><strong>No se encuentra la carpeta de datos <code><?= e($missing) ?></code></strong> que indica <code>config/storage.php</code>, y Borealis está usando <code>storage/</code>. Si cambiaste de servidor, sube esa carpeta o borra <code>config/storage.php</code> por FTP.</div>
+  <?php endif; ?>
   <?php if ($ex['status'] === 'exposed'): ?>
-    <div class="notice notice--danger" role="alert"><strong>La carpeta <code>storage/</code> se puede descargar desde internet.</strong> <?= e($ex['detail']) ?><br>
-      Qué hacer: pide al hosting que la carpeta raíz del sitio (DocumentRoot) sea <code>public/</code> dentro de Borealis. Si el servidor es Nginx, debe bloquear <code>/storage</code>, <code>/config</code>, <code>/database</code>, <code>/app</code>, <code>/bin</code>, <code>/tests</code> y <code>/docs</code> (ejemplo en el README). Mientras tanto, no guardes copias en el servidor.</div>
+    <div class="notice notice--danger" role="alert" data-exposed><strong>Los datos privados se pueden descargar desde internet.</strong> <?= e($ex['detail']) ?><br>
+      Solución sin pedir nada al hosting: pulsa <strong>Proteger ahora</strong>. Borealis hace una copia de la base de datos, mueve sus datos privados <?= \Borealis\Services\StorageMover::target()['kind'] === 'outside' ? 'fuera de la carpeta web' : 'a una carpeta con nombre secreto' ?>, renueva la llave de cifrado y vuelve a comprobar. No hay que hacer nada por FTP.</div>
   <?php elseif ($ex['status'] === 'safe'): ?>
-    <p class="notice"><?= icon('check', 'sm') ?> Las carpetas privadas (<code>storage/</code>, <code>database/</code>) no se pueden descargar desde internet. Comprobado <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$ex['checked_at']))) ?>.</p>
+    <p class="notice"><?= icon('check', 'sm') ?> Los datos privados no se pueden descargar desde internet. Comprobado <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$ex['checked_at']))) ?>.<?= $ex['detail'] ? ' ' . e($ex['detail']) : '' ?></p>
   <?php else: ?>
     <p class="notice">No se pudo comprobar automáticamente<?= $ex['detail'] ? ': ' . e($ex['detail']) : '' ?>. Compruébalo abriendo <code><?= e(\Borealis\Services\Exposure::baseUrl()) ?>/storage/.htaccess</code> en el navegador: debe responder «Prohibido» (403) o «No encontrado» (404).</p>
+  <?php endif; ?>
+  <p class="small" data-storage-place="<?= e($place) ?>"><strong>Dónde están los datos privados:</strong>
+    <?= $place === 'outside' ? 'fuera de la carpeta web (ninguna dirección de internet llega a ellos).' : ($place === 'secret' ? 'en una carpeta con nombre secreto dentro de Borealis.' : 'en <code>storage/</code>, dentro de la carpeta web.') ?></p>
+  <?php if ($place !== 'outside' || \Borealis\Security\Secrets::rotatable()): ?>
+    <div class="row wrap">
+      <?php if ($place !== 'outside'): ?>
+        <button class="btn <?= $ex['status'] === 'exposed' ? 'btn--primary' : '' ?> btn--sm" data-call="/api/admin/protect-storage" data-confirm="Se hará una copia de la base de datos, se moverán los datos privados a un lugar que internet no alcanza, se renovará la llave de cifrado y se comprobará de nuevo. Los enlaces para cambiar contraseña ya enviados dejarán de servir. ¿Continuar?" data-confirm-label="Proteger ahora" data-confirm-style="primary"><?= icon('shield', 'sm') ?> Proteger ahora</button>
+      <?php else: ?>
+        <button class="btn btn--sm" data-call="/api/admin/protect-storage" data-confirm="Se hará una copia de la base de datos y se cifrará todo de nuevo con una llave nueva. Úsalo si la llave anterior pudo verse. Los enlaces para cambiar contraseña ya enviados dejarán de servir. ¿Continuar?" data-confirm-label="Renovar llave" data-confirm-style="primary"><?= icon('restore', 'sm') ?> Renovar la llave de cifrado</button>
+      <?php endif; ?>
+    </div>
   <?php endif; ?>
   <?php if ($security['admins'] < 2): ?>
     <p class="notice mt" role="status"><?= icon('alert', 'sm') ?> Solo hay <strong>una</strong> cuenta con administración de la instalación. Si pierde su contraseña y el correo no está configurado, nadie podrá entrar a administrar. Da ese permiso a una segunda persona en Administración › Usuarios.</p>

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli') exit(1); // 1.16.5: never runs when requested from the web
 
 /*
  * A local SMTP server, ONLY for the test-suite (1.9). It speaks enough SMTP to check Borealis' side:

@@ -57,7 +57,7 @@ final class Scheduler
      */
     public static function run(string $source = 'cli', ?int $ts = null): array
     {
-        $lock = @fopen(BASE_PATH . '/storage/notify.lock', 'c');
+        $lock = @fopen(storage_path('notify.lock'), 'c');
         if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) return ['skipped' => true];
         $db = Database::get();
         $ready = self::ready();
@@ -210,7 +210,7 @@ final class Scheduler
 
     private static function tokenFile(): string
     {
-        return BASE_PATH . '/storage/cron.json';
+        return storage_path('cron.json');
     }
 
     /** Secret of the /cron/run address: config('cron.token') or one created once in storage/cron.json (encrypted). */

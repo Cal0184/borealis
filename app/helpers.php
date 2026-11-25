@@ -264,3 +264,9 @@ function rich_text(?string $text): string
     if ($inList) $html .= '</ul>';
     return $html;
 }
+
+/** 1.16.5: the private data folder (storage/ or where Administración › Datos moved it), plus an optional sub-path. */
+function storage_path(string $sub = ''): string
+{
+    return \Borealis\Core\StoragePath::get() . ($sub === '' ? '' : '/' . ltrim($sub, '/'));
+}

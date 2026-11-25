@@ -3,7 +3,7 @@
 // front that reads and writes dd/mm/aaaa, plus a button that opens the browser's calendar.
 // The original field stays in the form with its name and keeps the ISO value (aaaa-mm-dd) that
 // the server receives, so saving, autosave (data-patch) and validation work exactly as before.
-import { onInit } from './core.js?v=1.16.4';
+import { onInit } from './core.js?v=1.16.5';
 
 const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
 const iso = (el) => proto.get.call(el);

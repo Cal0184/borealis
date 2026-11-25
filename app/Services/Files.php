@@ -25,7 +25,7 @@ final class Files
 
     public static function dir(): string
     {
-        return rtrim((string)config('uploads.path', BASE_PATH . '/storage/uploads'), '/');
+        return rtrim((string)config('uploads.path', storage_path('uploads')), '/');
     }
 
     public static function upload(int $projectId, array $file, ?int $taskId = null, ?int $folderId = null): array

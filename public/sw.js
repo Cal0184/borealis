@@ -2,7 +2,7 @@
 // It does NOT cache pages, data or files of Borealis: after an update the browser always gets the new
 // version, and nothing private (projects, sessions, people) is ever stored on the device. The only
 // thing kept is the static «Sin conexión» page, shown when a page cannot be loaded at all.
-const VERSION = '1.16.4';
+const VERSION = '1.16.5';
 const scope = self.registration.scope; // e.g. https://example.org/borealis/
 const OFFLINE = 'borealis-offline-' + VERSION;
 
