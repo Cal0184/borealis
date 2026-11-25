@@ -10,5 +10,5 @@
   <button class="btn btn--primary" type="submit" style="width:100%">Iniciar sesión</button>
 </form>
 <?php if (config('app.allow_registration')): ?><p class="muted mt">¿Primera vez? <a href="<?= e(url('/register')) ?>">Crea tu espacio</a></p><?php endif; ?>
-<p class="muted small mt">¿Olvidaste tu contraseña? Una persona administradora de tu espacio puede restablecerla.</p>
+<p class="muted small mt"><a href="<?= e(url('/forgot')) ?>">¿Olvidaste tu contraseña?</a></p>
 <?php if ($supportEmail = \Borealis\Services\Support::installationEmail()): ?><p class="auth-support"><a class="btn btn--ghost btn--sm" href="<?= e(\Borealis\Services\Support::mailto($supportEmail, '¿No puedo entrar a Borealis?', null, null, absolute_url('/login'))) ?>" data-support><?= icon('mail', 'sm') ?> Correo al soporte</a></p><?php endif; ?>

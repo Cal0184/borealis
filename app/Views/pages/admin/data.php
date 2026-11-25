@@ -1,5 +1,21 @@
 <?= partial('admin-nav', compact('ws', 'section')) ?>
 <?php use Borealis\Services\Files; ?>
+<?php if ($instanceAdmin && $security): $ex = $security['exposure']; ?>
+<section class="card mb" id="seguridad"><div class="card-head"><h2><?= icon('shield') ?> Seguridad de la instalación</h2>
+  <button class="btn btn--sm" data-call="/api/admin/exposure-check"><?= icon('restore', 'sm') ?> Comprobar ahora</button></div><div class="card-body">
+  <?php if ($ex['status'] === 'exposed'): ?>
+    <div class="notice notice--danger" role="alert"><strong>La carpeta <code>storage/</code> se puede descargar desde internet.</strong> <?= e($ex['detail']) ?><br>
+      Qué hacer: pide al hosting que la carpeta raíz del sitio (DocumentRoot) sea <code>public/</code> dentro de Borealis. Si el servidor es Nginx, debe bloquear <code>/storage</code>, <code>/config</code>, <code>/database</code>, <code>/app</code>, <code>/bin</code>, <code>/tests</code> y <code>/docs</code> (ejemplo en el README). Mientras tanto, no guardes copias en el servidor.</div>
+  <?php elseif ($ex['status'] === 'safe'): ?>
+    <p class="notice"><?= icon('check', 'sm') ?> Las carpetas privadas (<code>storage/</code>, <code>database/</code>) no se pueden descargar desde internet. Comprobado <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$ex['checked_at']))) ?>.</p>
+  <?php else: ?>
+    <p class="notice">No se pudo comprobar automáticamente<?= $ex['detail'] ? ': ' . e($ex['detail']) : '' ?>. Compruébalo abriendo <code><?= e(\Borealis\Services\Exposure::baseUrl()) ?>/storage/.htaccess</code> en el navegador: debe responder «Prohibido» (403) o «No encontrado» (404).</p>
+  <?php endif; ?>
+  <?php if ($security['admins'] < 2): ?>
+    <p class="notice mt" role="status"><?= icon('alert', 'sm') ?> Solo hay <strong>una</strong> cuenta con administración de la instalación. Si pierde su contraseña y el correo no está configurado, nadie podrá entrar a administrar. Da ese permiso a una segunda persona en Administración › Usuarios.</p>
+  <?php endif; ?>
+</div></section>
+<?php endif; ?>
 <div class="grid grid-2">
   <section class="card"><div class="card-head"><h2><?= icon('download') ?> Exportar información</h2></div><div class="card-body">
     <p>Descarga en JSON todo el contenido de este espacio: equipos, proyectos, tareas, comentarios, documentos, historial y metadatos de archivos.</p>
@@ -60,7 +76,12 @@
     <?php foreach ($backups as $b): ?><li><?= icon('database') ?><span style="flex:1" class="truncate"><?= e($b['name']) ?></span><span class="muted small"><?= e(Files::humanSize((int)$b['size'])) ?> · <?= e(fmt_datetime($b['time'])) ?></span><a class="btn btn--ghost btn--sm" href="<?= e(url('/admin/backups/' . $b['name'])) ?>"><?= icon('download', 'sm') ?> Descargar</a></li><?php endforeach; ?>
     <?php if (!$backups): ?><li class="empty">Aún no hay copias. También puedes crearlas con <code>php bin/backup.php</code> (ideal para cron).</li><?php endif; ?>
   </ul>
-  <div class="card-foot muted small">Incluyen todos los espacios de la instalación. Los archivos subidos están en <code>storage/uploads</code> y deben copiarse aparte.</div>
+  <div class="card-foot muted small">Incluyen todos los espacios de la instalación. De las copias automáticas se guardan las <?= \Borealis\Services\Backup::KEEP ?> más recientes; las hechas a mano y las previas a una actualización no se borran. Estas copias están en el mismo servidor: para no perder nada si el servidor falla, descarga cada semana la copia completa (abajo) y guárdala en otro lugar.</div>
+  <div class="card-body" style="border-top:1px solid var(--border)">
+    <h3 class="small" style="margin:0 0 6px">Copia completa para guardar fuera del servidor</h3>
+    <p class="small muted" style="margin:0 0 10px">Un ZIP con la base de datos, <code>config/config.php</code> y la carpeta <code>storage/</code> (archivos subidos, fotos, llave de cifrado, llaves de los avisos y correo). Con él se puede rearmar Borealis en otro servidor (instrucciones en el LEEME del ZIP). Contiene la llave y los datos de todos: guárdalo en un lugar seguro.</p>
+    <form method="post" action="<?= e(url('/admin/copia-completa')) ?>"><?= csrf_field() ?><button class="btn btn--sm" type="submit"><?= icon('download', 'sm') ?> Descargar copia completa (.zip)</button></form>
+  </div>
 </section>
 <?php endif; ?>
 

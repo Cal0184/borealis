@@ -160,6 +160,15 @@ final class WorkspaceApi
         return Response::ok(['file' => basename($file)], 'Copia de seguridad creada');
     }
 
+    /** 1.16.4 · Administración › Datos › «Comprobar ahora»: can storage/ be downloaded from the web? */
+    public function exposureCheck(Request $r): Response
+    {
+        if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden('Solo la administración de la instalación.');
+        $res = \Borealis\Services\Exposure::check();
+        $msg = match ($res['status']) { 'exposed' => 'Peligro: storage/ se puede descargar desde internet', 'safe' => 'Bien: las carpetas privadas no se pueden descargar', default => 'No se pudo comprobar automáticamente' };
+        return Response::ok(['status' => $res['status'], 'reload' => true], $msg);
+    }
+
     /** Applies pending migrations from the browser (for hosting without shell access). Always backs up first. */
     public function migrate(Request $r): Response
     {

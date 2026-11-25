@@ -235,10 +235,16 @@ function rich_text(?string $text): string
     $inList = false;
     foreach ($lines as $line) {
         $esc = e($line);
+        // 1.16.4: links are set aside first, so that ** _ ` inside an address never cut or break it
+        $links = [];
+        $esc = preg_replace_callback('~\bhttps?://[^\s<]+~u', function ($m) use (&$links) {
+            $links[] = '<a href="' . $m[0] . '" rel="noopener noreferrer nofollow" target="_blank">' . $m[0] . '</a>';
+            return "\x01" . (count($links) - 1) . "\x01";
+        }, $esc);
         $esc = preg_replace('/\*\*(.+?)\*\*/u', '<strong>$1</strong>', $esc);
         $esc = preg_replace('/(?<![\w*])_(.+?)_(?!\w)/u', '<em>$1</em>', $esc);
         $esc = preg_replace('/`([^`]+)`/u', '<code>$1</code>', $esc);
-        $esc = preg_replace('~\bhttps?://[^\s<]+~u', '<a href="$0" rel="noopener noreferrer nofollow" target="_blank">$0</a>', $esc);
+        $esc = preg_replace_callback('/\x01(\d+)\x01/', fn($m) => $links[(int)$m[1]] ?? '', $esc);
         $esc = preg_replace('/(^|\s)@([a-z0-9._-]{2,60})/u', '$1<span class="mention">@$2</span>', $esc);
         if (preg_match('/^\s*[-*]\s+(.*)$/u', $esc, $m)) {
             if (!$inList) { $html .= '<ul>'; $inList = true; }

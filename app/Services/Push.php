@@ -74,7 +74,7 @@ final class Push
     {
         $v = Validator::check($input, ['endpoint' => 'required,string,max:1000', 'p256dh' => 'required,string,max:200', 'auth' => 'required,string,max:100', 'device' => 'nullable,string,max:120']);
         $u = parse_url($v['endpoint']);
-        if (($u['scheme'] ?? '') !== 'https' && !self::testEndpoint($v['endpoint'])) throw HttpException::invalid(['endpoint' => 'La suscripción no es válida.']);
+        if (!self::validEndpoint($v['endpoint'])) throw HttpException::invalid(['endpoint' => 'La suscripción no es válida.']);
         if (strlen(self::b64d($v['p256dh'])) !== 65 || strlen(self::b64d($v['auth'])) !== 16) throw HttpException::invalid(['p256dh' => 'Las claves de la suscripción no son válidas.']);
         $known = (bool)Database::get()->value('SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint_hash = ?', [Auth::id(), hash('sha256', $v['endpoint'])]);
         Database::get()->run('INSERT INTO push_subscriptions (user_id, endpoint, endpoint_hash, p256dh, auth, device, created_at) VALUES (?,?,?,?,?,?,?)
@@ -106,7 +106,7 @@ final class Push
         $row = $db->one('SELECT * FROM push_subscriptions WHERE endpoint_hash = ?', [hash('sha256', $v['old_endpoint'])]);
         if (!$row || !hash_equals((string)$row['auth'], $v['old_auth'])) return false;
         $u = parse_url($v['endpoint']);
-        if ((($u['scheme'] ?? '') !== 'https' && !self::testEndpoint($v['endpoint'])) || strlen(self::b64d($v['p256dh'])) !== 65 || strlen(self::b64d($v['auth'])) !== 16) return false;
+        if (!self::validEndpoint($v['endpoint']) || strlen(self::b64d($v['p256dh'])) !== 65 || strlen(self::b64d($v['auth'])) !== 16) return false;
         $db->run('DELETE FROM push_subscriptions WHERE endpoint_hash = ? AND id <> ?', [hash('sha256', $v['endpoint']), $row['id']]);
         $db->run('UPDATE push_subscriptions SET endpoint = ?, endpoint_hash = ?, p256dh = ?, auth = ?, failures = 0, last_error = NULL WHERE id = ?',
             [$v['endpoint'], hash('sha256', $v['endpoint']), $v['p256dh'], $v['auth'], $row['id']]);
@@ -126,6 +126,23 @@ final class Push
     }
 
     /** Local endpoints are accepted only by the test suite (BOREALIS_PUSH_TEST_HOSTS). */
+    /** 1.16.4: the push services of the browsers. Any other address is refused (the server POSTs to it). */
+    public const PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', '.push.services.mozilla.com', '.push.apple.com', '.notify.windows.com'];
+
+    public static function validEndpoint(string $url): bool
+    {
+        if (self::testEndpoint($url)) return true;
+        $u = parse_url($url);
+        if (($u['scheme'] ?? '') !== 'https' || empty($u['host']) || isset($u['user']) || isset($u['port']) && (int)$u['port'] !== 443) return false;
+        $host = strtolower($u['host']);
+        foreach (array_merge(self::PUSH_HOSTS, (array)config('push.allowed_hosts', [])) as $h) {
+            $h = strtolower((string)$h);
+            if ($h === '') continue;
+            if ($h[0] === '.' ? str_ends_with($host, $h) : $host === $h) return true;
+        }
+        return false;
+    }
+
     private static function testEndpoint(string $url): bool
     {
         $hosts = array_filter(explode(',', (string)(getenv('BOREALIS_PUSH_TEST_HOSTS') ?: config('push.test_hosts', ''))));

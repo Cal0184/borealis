@@ -5,7 +5,7 @@
 // When the board shows a sprint, a card where the person has no room left is marked as not
 // valid while dragging and the drop is refused with the reason. The server checks the same
 // rules (polivalente, available hours) and is the one that decides.
-import { api, toast, refresh, saveState } from './core.js?v=1.16.3';
+import { api, toast, refresh, saveState } from './core.js?v=1.16.4';
 
 let dragging = null;
 

@@ -11,6 +11,10 @@ $r = new Router();
 $r->get('/login', [C\AuthController::class, 'loginForm'], ['public' => true]);
 $r->post('/login', [C\AuthController::class, 'login'], ['public' => true]);
 $r->post('/logout', [C\AuthController::class, 'logout'], ['public' => true]);
+$r->get('/forgot', [C\AuthController::class, 'forgotForm'], ['public' => true]);
+$r->post('/forgot', [C\AuthController::class, 'forgot'], ['public' => true]);
+$r->get('/reset', [C\AuthController::class, 'resetForm'], ['public' => true]);
+$r->post('/reset', [C\AuthController::class, 'reset'], ['public' => true]);
 $r->get('/register', [C\AuthController::class, 'registerForm'], ['public' => true]);
 $r->post('/register', [C\AuthController::class, 'register'], ['public' => true]);
 $r->get('/invite/{token}', [C\AuthController::class, 'inviteForm'], ['public' => true]);
@@ -80,6 +84,7 @@ $r->post('/api/admin/cron-token', [Api\WorkspaceApi::class, 'rotateCronToken']);
 $r->get('/admin/data', [C\AdminController::class, 'data']);
 $r->get('/admin/export.json', [C\AdminController::class, 'exportJson']);
 $r->get('/admin/backups/{name}', [C\AdminController::class, 'downloadBackup']);
+$r->post('/admin/copia-completa', [C\AdminController::class, 'downloadAll']);
 
 // ---- JSON API ----------------------------------------------------------------
 $r->post('/api/workspace/switch', [Api\WorkspaceApi::class, 'switch']);
@@ -106,6 +111,7 @@ $r->patch('/api/priorities/{id}', [Api\WorkspaceApi::class, 'savePriority']);
 $r->delete('/api/priorities/{id}', [Api\WorkspaceApi::class, 'deletePriority']);
 $r->post('/api/backups', [Api\WorkspaceApi::class, 'backup']);
 $r->post('/api/migrations', [Api\WorkspaceApi::class, 'migrate']);
+$r->post('/api/admin/exposure-check', [Api\WorkspaceApi::class, 'exposureCheck']);
 $r->post('/api/import/legacy', [Api\WorkspaceApi::class, 'importLegacy']);
 $r->patch('/api/profile', [Api\WorkspaceApi::class, 'profile']);
 $r->post('/api/profile/photo', [Api\WorkspaceApi::class, 'photo']);

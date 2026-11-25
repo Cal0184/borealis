@@ -1774,7 +1774,9 @@ $gacc = $q('SELECT * FROM google_accounts WHERE user_id = ?', [$carlos])->fetch(
 check('Conexión completada: cuenta, correo y estado guardados', $gacc && $gacc['google_email'] === 'cal@gmail.test' && $gacc['status'] === 'active', snippet($carlosC));
 check('Los tokens se guardan cifrados en el servidor', $gacc && str_starts_with((string)$gacc['access_token'], 'v1:') && str_starts_with((string)$gacc['refresh_token'], 'v1:') && !str_contains((string)$gacc['access_token'], 'at-'));
 $keyFile = dirname(__DIR__, 2) . '/storage/app.key';
-check('La clave de cifrado está en storage/ con permisos 0600', is_file($keyFile) && (fileperms($keyFile) & 0777) === 0600, is_file($keyFile) ? decoct(fileperms($keyFile) & 0777) : 'no existe');
+// 1.16.4: a new installation keeps the key in config/config.php (never downloadable), not in storage/
+$cfgText = (string)@file_get_contents(dirname(__DIR__, 2) . '/config/config.php');
+check('La clave de cifrado está en config/config.php y no en storage/', !is_file($keyFile) && preg_match("/'key' => 'base64:[A-Za-z0-9+\\/=]{44}'/", $cfgText) === 1, is_file($keyFile) ? 'storage/app.key existe' : 'sin clave en config.php');
 $carlosC->get('/profile');
 check('El navegador nunca recibe los tokens', !preg_match('/\b(at|rt)-[0-9a-f]{12}\b/', $carlosC->body) && str_contains($carlosC->body, 'cal@gmail.test') && str_contains($carlosC->body, '>Conectado<'));
 $carlosC->api('GET', '/api/google/calendars');
@@ -2119,6 +2121,7 @@ require __DIR__ . '/v114.php';
 require __DIR__ . '/v115.php';
 require __DIR__ . '/v116.php';
 require __DIR__ . '/v1163.php';
+require __DIR__ . '/v1164.php';
 
 // ---------------------------------------------------------------- summary
 $pass = count(array_filter($results, fn($r) => $r['ok']));

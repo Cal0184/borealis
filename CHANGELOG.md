@@ -1,5 +1,39 @@
 # Cambios
 
+## 1.16.4 (25/11/2026)
+
+Arreglos de la auditoría externa (`docs/AUDITORIA-EXTERNA.md`). Sin migraciones: se sube por FTP conservando `config/config.php` y `storage/`.
+
+**Carpeta privada `storage/` descargable (riesgo rojo):**
+- **Comprobación automática:** Administración › Datos › «Seguridad de la instalación» pide desde el propio servidor un archivo de prueba de `storage/` y `database/migrations/001_core.sql`. Si alguno se descarga, la administración de la instalación ve una alerta roja en todas las páginas, con lo que hay que pedir al hosting. Se repite cada 12 horas con la tarea programada y con «Comprobar ahora».
+- **Copias imposibles de adivinar:** el nombre de cada copia lleva una parte aleatoria.
+- **Llave fuera de `storage/`:** en una instalación nueva, la llave de cifrado se guarda en `config/config.php`, que el servidor ejecuta y nunca entrega como texto. Las instalaciones existentes siguen con `storage/app.key`.
+- **README:** con Nginx, la raíz debe ser `public/` (o bloquear las carpetas; ejemplo incluido).
+
+**Copias de seguridad (riesgo rojo):**
+- **Copia completa (.zip)** en Administración › Datos: base de datos + `config/config.php` + `storage/` (archivos subidos, fotos, llave, avisos, correo) y un LEEME con los pasos para rearmar Borealis en otro servidor. Pensada para descargarla cada semana y guardarla fuera del servidor. El ZIP temporal se borra del servidor al enviarlo.
+- **Rotación:** de las copias automáticas (antes de eliminar a alguien, de importar, etc.) se guardan las 20 más recientes. Las hechas a mano y las previas a una actualización no se borran.
+- **Copias cortadas:** se escriben primero como `.part` y solo al terminar pasan a `.sql`, con la marca «fin de la copia». Si no hay permiso de escritura, el error lo dice.
+
+**Instalador cerrado en un traslado (riesgo naranja):** si `storage/` ya tiene datos de una instalación (llave, copias, archivos) y solo falta `config/config.php`, el instalador no se abre y pide subir ese archivo. Así nadie que llegue primero puede apoderarse del sitio con otra base de datos. Para instalar desde cero en esa carpeta se crea `storage/install.allow`.
+
+**Cuentas:**
+- **«¿Olvidaste tu contraseña?»** en el inicio de sesión. Envía por correo un enlace firmado de 60 minutos, que deja de valer al usarse o al cambiar la contraseña. Da la misma respuesta exista o no la cuenta y permite 3 enlaces por correo y 10 por IP cada hora. Sin correo configurado, lo dice y remite a la administración.
+- **Una sola administración:** Administración › Datos avisa si solo una cuenta administra la instalación.
+
+**Detrás de un proxy o CDN:** con `'trusted_proxies'` en `config.php`, los límites de inicio de sesión usan la IP real de cada persona. Antes, unos cuantos intentos fallidos de cualquiera podían bloquear a todos.
+
+**Avisos push:** solo se aceptan direcciones de los servicios de los navegadores (Google, Mozilla, Apple, Microsoft), para que nadie use el servidor para llamar a direcciones internas.
+
+**Menores:**
+- La zona horaria por defecto del instalador es `America/Santiago`.
+- Los enlaces con `**` o `_` en el texto ya no se cortan.
+- El README estaba titulado «1.13».
+
+**Pruebas:**
+- `tests/integration/v1164.php` y `tests/unit/security-1164.php`.
+- `.github/workflows/pruebas.yml` corre las pruebas unitarias y de integración en GitHub con cada cambio.
+
 ## 1.16.3 (25/11/2026)
 
 Arreglo rápido. Sin migraciones: se sube por FTP conservando `config/` y `storage/`.

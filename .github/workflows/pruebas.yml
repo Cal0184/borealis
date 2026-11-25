@@ -1,0 +1,62 @@
+# 1.16.4 · Runs the tests on every push and pull request (recommended by docs/AUDITORIA-EXTERNA.md).
+# Unit tests (no server) and the HTTP integration suite against a real, EMPTY MariaDB database and
+# PHP's built-in server. The browser suite (tests/e2e) and the PHP-FPM/Apache engine test (tests/fpm)
+# are not run here: they need Playwright and root access to install web servers.
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: borealis_test
+          MARIADB_USER: borealis
+          MARIADB_PASSWORD: borealis
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, fileinfo, iconv, curl, openssl, sodium, zip, gd
+          coverage: none
+      - name: Sintaxis de todos los archivos PHP
+        run: find app bin public tests -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: Pruebas unitarias
+        run: |
+          for f in tests/unit/*.php; do
+            echo "== $f"
+            php "$f" | php -r '$d = json_decode(stream_get_contents(STDIN), true); foreach ($d["checks"] as $c) if (!$c["ok"]) echo "FALLA: {$c["name"]} {$c["detail"]}\n"; exit($d["ok"] ? 0 : 1);'
+          done
+      - name: Pruebas de integración (instalación y uso por HTTP)
+        env:
+          BOREALIS_URL: http://127.0.0.1:8080
+          BOREALIS_TEST_DB_HOST: 127.0.0.1
+          BOREALIS_TEST_DB_NAME: borealis_test
+          BOREALIS_TEST_DB_USER: borealis
+          BOREALIS_TEST_DB_PASS: borealis
+          PHP_CLI_SERVER_WORKERS: '4'
+        run: |
+          php -S 127.0.0.1:8080 -t public public/router.php > /tmp/server.log 2>&1 &
+          sleep 1
+          php tests/integration/run.php --json=resultados-integracion.json
+      - name: Guardar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados
+          path: |
+            resultados-integracion.json
+            storage/logs/
+          if-no-files-found: ignore
