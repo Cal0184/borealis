@@ -84,9 +84,27 @@ final class Request
         return $this->query[$key] ?? $default;
     }
 
+    /**
+     * The visitor's address. 1.16.4: behind a proxy or CDN, REMOTE_ADDR is the proxy for everybody (and a
+     * few wrong passwords would lock out the whole company). With 'app.trusted_proxies' => ['10.0.0.5', …]
+     * (or ['*'] when the server is only reachable through the proxy) the address comes from X-Forwarded-For,
+     * read from the right and skipping the trusted proxies. Without that setting it is never trusted.
+     */
     public function ip(): string
     {
-        return (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        $trusted = (array)Config::get('app.trusted_proxies', []);
+        if (!$trusted) return $remote;
+        $any = in_array('*', $trusted, true);
+        if (!$any && !in_array($remote, $trusted, true)) return $remote;
+        $chain = array_values(array_filter(array_map('trim', explode(',', (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')))));
+        // '*': one proxy in front, so the last address it added is the visitor
+        if ($any) return ($last = end($chain)) && filter_var($last, FILTER_VALIDATE_IP) ? $last : $remote;
+        foreach (array_reverse($chain) as $ip) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP)) break;
+            if (!in_array($ip, $trusted, true)) return $ip;
+        }
+        return $remote;
     }
 
     public function param(string $key): string

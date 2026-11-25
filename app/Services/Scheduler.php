@@ -129,6 +129,9 @@ final class Scheduler
                 try { $out['automations'] = Automations::runScheduled(); } catch (\Throwable $e) { $errors[] = 'Automatizaciones: ' . $e->getMessage(); }
             }
             try { self::dailyDigest(); } catch (\Throwable $e) { $errors[] = 'Registro maestro: ' . $e->getMessage(); }
+            // 1.16.4: every 12 hours, check that storage/ cannot be downloaded from the web
+            try { if (Exposure::stale()) Exposure::check(); } catch (\Throwable $e) { $errors[] = 'Comprobación de carpetas privadas: ' . $e->getMessage(); }
+            try { Backup::prune(); } catch (\Throwable) {}
         } catch (\Throwable $e) {
             $errors[] = $e->getMessage();
         } finally {

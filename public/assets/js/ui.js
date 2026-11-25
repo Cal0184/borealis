@@ -1,7 +1,7 @@
 // Declarative behaviours: data-api forms, data-call buttons, data-patch inline edits,
 // menus, dialogs, toggles, selection and bulk actions.
-import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.16.3';
-import { openTask, closeDrawer } from './drawer.js?v=1.16.3';
+import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.16.4';
+import { openTask, closeDrawer } from './drawer.js?v=1.16.4';
 
 // ---------- Form serialisation ----------
 function serialize(form) {

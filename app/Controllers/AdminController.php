@@ -163,6 +163,7 @@ final class AdminController
         $m = new Migrator(Database::get()->pdo);
         return View::page('admin/data', $this->base('data') + [
             'instanceAdmin' => $instanceAdmin, 'backups' => $instanceAdmin ? Backup::list() : [],
+            'security' => $instanceAdmin ? ['exposure' => \Borealis\Services\Exposure::maybeCheck(), 'admins' => (int)Database::get()->value('SELECT COUNT(*) FROM users WHERE is_instance_admin = 1 AND is_active = 1')] : null,
             'applied' => $m->applied(), 'pending' => array_keys($m->pending()), 'imports' => $this->imports(),
         ]);
     }
@@ -186,9 +187,19 @@ final class AdminController
     {
         if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden();
         $name = basename($r->param('name'));
-        if (!preg_match('/^borealis-[0-9]{8}-[0-9]{6}-[a-z0-9-]+\.sql$/', $name)) throw HttpException::notFound();
+        if (!preg_match(Backup::NAME_RE, $name)) throw HttpException::notFound();
         $path = Backup::dir() . '/' . $name;
         if (!is_file($path)) throw HttpException::notFound();
         return Response::download($path, $name, 'application/sql');
+    }
+
+    /** 1.16.4 · «Descargar todo»: SQL + config/config.php + storage/ in one ZIP, to keep outside the server. */
+    public function downloadAll(Request $r): Response
+    {
+        if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden();
+        $zip = Backup::fullArchive();
+        register_shutdown_function(static fn() => @unlink($zip));
+        \Borealis\Services\Activity::log('exported', 'workspace', \Borealis\Security\Policy::wsId(), 'Descargó la copia completa de la instalación');
+        return Response::download($zip, 'borealis-copia-completa-' . gmdate('Y-m-d') . '.zip', 'application/zip');
     }
 }

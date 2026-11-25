@@ -45,6 +45,45 @@ final class AuthController
         return Response::redirect($this->safeNext($r->post['next'] ?? null));
     }
 
+    // 1.16.4 · «¿Olvidaste tu contraseña?» (Services/PasswordReset.php)
+    public function forgotForm(Request $r): Response
+    {
+        if (Auth::user()) return Response::redirect(url('/'));
+        return View::page('auth/forgot', ['title' => 'Recuperar contraseña', 'layout' => 'auth', 'email' => '', 'errors' => [], 'sent' => false, 'available' => \Borealis\Services\PasswordReset::available()]);
+    }
+
+    public function forgot(Request $r): Response
+    {
+        $email = trim((string)($r->post['email'] ?? ''));
+        $available = \Borealis\Services\PasswordReset::available();
+        try {
+            if ($available) \Borealis\Services\PasswordReset::request($email, $r->ip());
+        } catch (HttpException $e) {
+            return View::page('auth/forgot', ['title' => 'Recuperar contraseña', 'layout' => 'auth', 'email' => $email, 'errors' => ['_' => $e->getMessage()], 'sent' => false, 'available' => $available], $e->status === 429 ? 429 : 422);
+        }
+        return View::page('auth/forgot', ['title' => 'Recuperar contraseña', 'layout' => 'auth', 'email' => $email, 'errors' => [], 'sent' => $available, 'available' => $available]);
+    }
+
+    public function resetForm(Request $r): Response
+    {
+        $token = (string)$r->q('t', '');
+        $valid = \Borealis\Services\PasswordReset::verify($token) !== null;
+        return View::page('auth/reset', ['title' => 'Nueva contraseña', 'layout' => 'auth', 'token' => $token, 'valid' => $valid, 'errors' => []], $valid ? 200 : 410);
+    }
+
+    public function reset(Request $r): Response
+    {
+        $token = (string)($r->post['t'] ?? '');
+        try {
+            \Borealis\Services\PasswordReset::reset($token, (string)($r->post['password'] ?? ''), $r->ip());
+        } catch (HttpException $e) {
+            $errs = $e->errors ?? [];
+            return View::page('auth/reset', ['title' => 'Nueva contraseña', 'layout' => 'auth', 'token' => $token, 'valid' => \Borealis\Services\PasswordReset::verify($token) !== null, 'errors' => ($errs ?: ['_' => $e->getMessage()])], 422);
+        }
+        Session::flash('notice', 'Listo: ya puedes iniciar sesión con tu nueva contraseña.');
+        return Response::redirect(url('/login'));
+    }
+
     public function logout(Request $r): Response
     {
         if ($uid = Auth::id()) \Borealis\Services\Activity::security('logout', (int)$uid, 'Cerró sesión', $r->ip());

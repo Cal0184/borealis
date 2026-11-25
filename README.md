@@ -1,8 +1,13 @@
-# Borealis 1.13 — Forest Edition
+# Borealis 1.16.4
 
 Borealis organiza equipos, proyectos y tareas. Empieza simple (un proyecto solo necesita nombre y una tarea solo título) y crece por módulos cuando el equipo lo necesita: backlog, sprints, calendario, estimaciones, épicas, documentación, reportes y cronograma.
 
 Aplicación web en PHP 8.2+ y MySQL/MariaDB, sin dependencias externas, pensada para hospedaje convencional (Apache con `mod_rewrite`, Nginx o el servidor que tengas).
+
+**Documentos clave:**
+- [`docs/DESARROLLO.md`](docs/DESARROLLO.md): cómo tenerlo funcionando en tu computador, dónde está cada cosa, cómo probar, empaquetar y subir los cambios al servidor.
+- [`docs/AUDITORIA-EXTERNA.md`](docs/AUDITORIA-EXTERNA.md): cómo funciona, qué es lo importante, qué fallas tiene y qué se corrigió.
+- [`CHANGELOG.md`](CHANGELOG.md): qué cambió en cada versión.
 
 ---
 
@@ -26,6 +31,7 @@ Se recomienda HTTPS: la cookie de sesión se marca como `Secure` automáticament
 4. Apunta el dominio:
    - **Recomendado:** la raíz web (DocumentRoot) en la carpeta `public/`.
    - **Hospedaje compartido sin control del DocumentRoot:** sube todo a la raíz; el `.htaccess` incluido redirige a `public/` y bloquea `app/`, `config/`, `storage/`, `database/`, `bin/` y `tests/`.
+     **Esto solo funciona con Apache o LiteSpeed.** Nginx ignora los `.htaccess`: con Nginx la raíz web **debe** ser `public/`, o bloquear esas carpetas en su configuración (ejemplo abajo). Desde 1.16.4, Administración › Datos › «Seguridad de la instalación» comprueba sola si `storage/` se puede descargar y muestra una alerta roja si es así. Compruébalo también a mano: `https://TU-DOMINIO/storage/.htaccess` debe responder 403 o 404.
 5. Abre la URL en el navegador. El instalador:
    - verifica requisitos,
    - prueba la conexión a la base,
@@ -33,6 +39,8 @@ Se recomienda HTTPS: la cookie de sesión se marca como `Secure` automáticament
    - aplica las migraciones,
    - crea tu cuenta de administración y tu primer espacio de trabajo,
    - escribe `config/config.php` con permisos 0640.
+   - (1.16.4) guarda la llave de cifrado dentro de `config/config.php` (`app.key`), no en `storage/`.
+   - (1.16.4) **no se abre** si `storage/` ya tiene datos de una instalación (llave, copias, archivos) y solo falta `config/config.php`: así nadie puede apoderarse del sitio durante un traslado. Para instalar desde cero en esa carpeta, crea un archivo vacío `storage/install.allow`.
 6. Al terminar quedas dentro de la aplicación.
 
 **Sin `mod_rewrite`:** desmarca «URLs amigables» en el instalador; las direcciones serán del tipo `index.php?r=/projects`.
@@ -43,6 +51,13 @@ Se recomienda HTTPS: la cookie de sesión se marca como `Secure` automáticament
 root /var/www/borealis/public;
 location / { try_files $uri /index.php?$query_string; }
 location ~ \.php$ { include fastcgi_params; fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name; fastcgi_pass unix:/run/php/php8.3-fpm.sock; }
+```
+
+Si con Nginx no se puede cambiar la raíz a `public/` (todo subido a la raíz del sitio), bloquea las carpetas privadas:
+
+```nginx
+location ~ ^/(app|config|database|storage|bin|tests|docs)(/|$) { deny all; return 404; }
+location ~ /\. { deny all; return 404; }
 ```
 
 **Prueba local rápida:**
@@ -70,7 +85,8 @@ Todo vive en `config/config.php` (lo genera el instalador; `config/config.exampl
 | `session.idle_minutes` | Cierre de sesión por inactividad (240 por defecto). |
 | `google.client_id`, `google.client_secret` | Opcional (1.6). Cliente OAuth de Google Cloud para Google Calendar y Google Tasks. Sin estas claves la conexión con Google no aparece y todo lo demás funciona igual. Ver «Google Calendar y Google Tasks». |
 | `google.redirect_uri` | Opcional. Solo si la URL de retorno no es `app.url` + `/google/callback`. |
-| `app.key` | Opcional. Clave de 32 bytes en base64 para cifrar los tokens de Google. Si no existe, Borealis crea `storage/app.key` (permisos 0600) la primera vez. Si se pierde, cada persona solo tiene que volver a conectar Google. |
+| `app.key` | Llave de 32 bytes en base64 que cifra los secretos guardados (Google, correo, avisos, webhooks). Desde 1.16.4 el instalador la escribe aquí. En instalaciones anteriores está en `storage/app.key`. Si se pierde, hay que volver a configurar el correo, Google y los webhooks, y cada persona debe reactivar sus avisos. |
+| `app.trusted_proxies` | Opcional (1.16.4). IP del proxy o CDN, o `['*']`, para usar la IP real de cada persona en los límites de inicio de sesión. |
 
 El ZIP **no incluye** contraseñas, claves ni credenciales: el instalador las pide y genera un nombre de sesión aleatorio por instalación.
 
@@ -202,6 +218,10 @@ Lo que se probó sin servicios reales: las pruebas usan un servidor local que im
 - Cabeceras: CSP sin scripts en línea, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`.
 - **Archivos:** lista blanca de extensiones, bloqueo de extensiones ejecutables en cualquier parte del nombre (`foto.php.jpg`), verificación del contenido real (MIME), tamaño máximo, nombre aleatorio, almacenados fuera de `public/` y servidos solo tras comprobar permisos, como descarga con `nosniff` y CSP de sandbox.
 - CSV con neutralización de fórmulas.
+- (1.16.4) **Recuperar contraseña por correo** (`/forgot`): enlace firmado de 60 minutos que deja de valer al cambiar la contraseña; misma respuesta exista o no la cuenta; 3 enlaces por correo y 10 por IP cada hora. Necesita el correo configurado (Administración › Datos › Correo); sin él, la administración restablece la contraseña como antes.
+- (1.16.4) **Detrás de un proxy o CDN:** `'app' => ['trusted_proxies' => ['IP-del-proxy']]` (o `['*']` si el servidor solo se alcanza por el proxy) para que los límites de inicio de sesión usen la IP real de cada persona y no bloqueen a todos a la vez.
+- (1.16.4) Los avisos push solo se envían a los servicios de los navegadores (Google, Mozilla, Apple, Microsoft); `push.allowed_hosts` agrega otros.
+- (1.16.4) Administración › Datos avisa si hay **una sola** cuenta con administración de la instalación.
 
 ## 7. Actualizaciones
 
@@ -369,10 +389,11 @@ Se importan personas (unificadas por correo), equipos, proyectos con sus estados
 
 ## 8. Copias de seguridad
 
-- **Completa (SQL):** Administración › Datos (solo la administración de la instalación) o `php bin/backup.php`. Se guardan en `storage/backups/` y se descargan desde la misma pantalla.
+- **Completa (SQL):** Administración › Datos (solo la administración de la instalación) o `php bin/backup.php`. Se guardan en `storage/backups/` con una parte aleatoria en el nombre y se descargan desde la misma pantalla. Desde 1.16.4 se conservan las 20 copias automáticas más recientes (antes de eliminar a alguien, de importar, etc.); las hechas a mano y las previas a una actualización no se borran. Una copia cortada a medias nunca queda con nombre `.sql`.
+- **Copia completa para guardar fuera del servidor (1.16.4):** Administración › Datos › «Descargar copia completa (.zip)»: base de datos + `config/config.php` + `storage/` (archivos subidos, llave, avisos, correo) y un LEEME con los pasos para rearmar Borealis en otro servidor. **Hazlo cada semana** y guárdalo fuera del servidor: las copias de `storage/backups` se pierden junto con el servidor.
 - **Por cron:** `0 3 * * * php /ruta/a/borealis/bin/backup.php --keep=14` (con `--keep` solo se rotan las copias automáticas; las manuales y las previas a actualizar nunca se borran).
 - **Exportación del espacio (JSON):** Administración › Datos › Exportar.
-- **Restaurar:** `mysql -u USUARIO -p BASE < storage/backups/archivo.sql` y copia de vuelta `storage/uploads/`.
+- **Restaurar:** `mysql -u USUARIO -p BASE < storage/backups/archivo.sql` (o phpMyAdmin › Importar) y copia de vuelta `storage/uploads/`.
 - Respalda también `storage/uploads/` (los archivos adjuntos).
 
 ## 9. Solución de problemas
@@ -390,11 +411,11 @@ Se importan personas (unificadas por correo), equipos, proyectos con sus estados
 | Los avisos al móvil llegan solo cuando alguien abre Borealis | La tarea programada no corre. Administración › Notificaciones dice desde cuándo y muestra el último error. Revisa que el comando use la versión de PHP del sitio (`/usr/bin/php8.2`, no `php`) y mira `storage/logs/notify.log`. Si el alojamiento solo permite URLs, usa `/cron/run?token=…`. |
 | Un dispositivo dejó de recibir avisos | Administración › Notificaciones › Envíos muestra el motivo. Un 401/403 indica un problema con las claves VAPID (¿se borró `storage/vapid.json`?). Quien tenga el problema puede volver a pulsar «Activar en este dispositivo». |
 | Discord o GitHub muestran un error en «Todo a mano» | El mensaje dice la causa (webhook eliminado, token caducado, límite de consultas, sin conexión). El resto de Borealis no se ve afectado. |
-| Olvidé la contraseña de administración | Otra cuenta con permiso «Gestionar personas» puede restablecerla en Administración › Personas. |
+| Olvidé la contraseña de administración | «¿Olvidaste tu contraseña?» en el inicio de sesión (necesita el correo configurado), u otra cuenta con permiso de administrar personas la restablece en Administración › Usuarios. |
 
 ## 10. Pruebas
 
-Ver [`docs/PRUEBAS.md`](docs/PRUEBAS.md) para los resultados reales y cómo repetirlas.
+Paso a paso en [`docs/DESARROLLO.md`](docs/DESARROLLO.md) › Pruebas; resultados en [`docs/PRUEBAS.md`](docs/PRUEBAS.md). En GitHub, las pruebas unitarias y de integración corren solas en cada cambio (pestaña «Actions»).
 
 ```bash
 # Servidor de prueba con una base de datos VACÍA

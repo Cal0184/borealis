@@ -23,7 +23,7 @@ $file = Backup::create(null, 'cron');
 echo "Copia creada: $file\n";
 if ($keep === null) exit(0);
 // Only automatic copies are rotated; manual and pre-update copies are never removed.
-$auto = glob(Backup::dir() . '/borealis-*-cron.sql') ?: [];
+$auto = array_merge(glob(Backup::dir() . '/borealis-*-cron.sql') ?: [], glob(Backup::dir() . '/borealis-*-cron-*.sql') ?: []);
 rsort($auto);
 foreach (array_slice($auto, $keep) as $old) {
     unlink($old);

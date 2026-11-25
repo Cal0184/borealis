@@ -8,10 +8,13 @@ return [
         // true when the web server rewrites unknown paths to public/index.php (.htaccess included)
         'pretty_urls' => true,
         'debug' => false,
-        'timezone' => 'America/Mexico_City',
+        'timezone' => 'America/Santiago',
         'allow_registration' => false,
         // 1.4.1: true lets any signed-in person create workspaces. Off: only the installation's administration.
         'allow_workspace_creation' => false,
+        // 1.16.4 (optional): only if Borealis is behind a proxy or CDN. Its address(es), or ['*'] when the
+        // server can only be reached through one proxy. Then the sign-in limits use each person's real IP.
+        // 'trusted_proxies' => ['10.0.0.5'],
     ],
     'db' => [
         'driver' => 'mysql',
