@@ -1,7 +1,15 @@
 <?php
 declare(strict_types=1);
 
-require dirname(__DIR__) . '/app/bootstrap.php';
+// 1.16.6: the public files can live apart from the rest (core in a secret-named folder or outside the web).
+// nucleo.php, next to this file, returns where the core is (relative to this folder or absolute).
+$core = dirname(__DIR__);
+if (is_file(__DIR__ . '/nucleo.php')) {
+    $c = trim((string)(require __DIR__ . '/nucleo.php'));
+    if ($c !== '') $core = (str_starts_with($c, '/') || preg_match('~^[A-Za-z]:[\\\\/]~', $c) === 1) ? rtrim($c, '/\\') : __DIR__ . '/' . trim($c, '/\\');
+}
+define('PUBLIC_PATH', __DIR__);
+require $core . '/app/bootstrap.php';
 
 use Borealis\Core\Config;
 use Borealis\Core\ErrorHandler;

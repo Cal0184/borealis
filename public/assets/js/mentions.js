@@ -1,5 +1,5 @@
 // @mentions: suggests project members while typing in a comment.
-import { appUrl } from './core.js?v=1.16.5';
+import { appUrl } from './core.js?v=1.16.6';
 
 const cache = new Map();
 let pop = null;

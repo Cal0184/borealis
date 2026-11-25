@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<!-- Borealis: sube este archivo a la carpeta borealis/ (reemplaza el index.html de prueba) cuando el servidor (Nginx)
+     no apunta la web a public/. Lleva a quien entra a https://DOMINIO/borealis/ hasta la aplicación. -->
+<meta http-equiv="refresh" content="0; url=public/">
+<meta name="robots" content="noindex">
+<title>Borealis</title>
+<script>location.replace('public/' + location.search + location.hash);</script>
+</head><body style="font:16px system-ui;margin:40px"><p><a href="public/">Entrar a Borealis</a></p></body></html>

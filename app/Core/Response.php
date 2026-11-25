@@ -57,6 +57,10 @@ final class Response
                 'Referrer-Policy' => 'same-origin',
                 'Content-Security-Policy' => "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'",
             ];
+            // 1.16.6: over HTTPS, browsers must not fall back to plain HTTP for this host (no subdomains).
+            if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || str_starts_with((string)Config::get('app.url', ''), 'https://')) {
+                $defaults['Strict-Transport-Security'] = 'max-age=15552000';
+            }
             // 1.6: pages are personal (greeting, notifications, permissions). Never let a proxy or the
             // browser keep one person's page for another (e.g. a caching Nginx template in HestiaCP).
             if (str_starts_with($this->headers['Content-Type'] ?? '', 'text/html') && !isset($this->headers['Cache-Control'])) {
