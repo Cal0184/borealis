@@ -80,7 +80,7 @@ preg_match('~href="(mailto:[^"]+)"[^>]*data-support~', $bruno->body, $mm);
 $mail = html_entity_decode($mm[1] ?? '');
 parse_str((string)parse_url($mail, PHP_URL_QUERY), $mq);
 check('Todos ven «Correo al soporte»: abre su correo con la dirección, el asunto y el espacio', str_starts_with($mail, 'mailto:soporte%40example.test?') && str_starts_with((string)($mq['subject'] ?? ''), 'Ayuda Borealis · '), $mail);
-check('…con los datos que el soporte necesita: quién, página, versión', str_contains((string)($mq['body'] ?? ''), 'Bruno Prueba <bruno@example.test>') && str_contains((string)$mq['body'], '/my-work') && str_contains((string)$mq['body'], 'Borealis 1.16.5') && str_contains((string)$mq['body'], '¿Qué pasó?'), (string)($mq['body'] ?? ''));
+check('…con los datos que el soporte necesita: quién, página, versión', str_contains((string)($mq['body'] ?? ''), 'Bruno Prueba <bruno@example.test>') && str_contains((string)$mq['body'], '/my-work') && str_contains((string)$mq['body'], 'Borealis 1.16.6') && str_contains((string)$mq['body'], '¿Qué pasó?'), (string)($mq['body'] ?? ''));
 check('Está en el menú de la cuenta y en la barra lateral', substr_count($bruno->body, 'data-support') >= 2);
 $anonS = new Client($BASE); $anonS->get('/login');
 check('También en la página de inicio de sesión (para quien no puede entrar)', str_contains($anonS->body, 'data-support') && str_contains(html_entity_decode($anonS->body), 'mailto:soporte%40example.test'), snippet($anonS));
