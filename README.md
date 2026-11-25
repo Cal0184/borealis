@@ -4,6 +4,11 @@ Borealis organiza equipos, proyectos y tareas. Empieza simple (un proyecto solo 
 
 Aplicación web en PHP 8.2+ y MySQL/MariaDB, sin dependencias externas, pensada para hospedaje convencional (Apache con `mod_rewrite`, Nginx o el servidor que tengas).
 
+**Documentos clave:**
+- [`docs/DESARROLLO.md`](docs/DESARROLLO.md): cómo tenerlo funcionando en tu computador, dónde está cada cosa, cómo probar, empaquetar y subir los cambios al servidor.
+- [`docs/AUDITORIA-EXTERNA.md`](docs/AUDITORIA-EXTERNA.md): cómo funciona, qué es lo importante, qué fallas tiene y qué se corrigió.
+- [`CHANGELOG.md`](CHANGELOG.md): qué cambió en cada versión.
+
 ---
 
 ## 1. Requisitos
@@ -80,7 +85,8 @@ Todo vive en `config/config.php` (lo genera el instalador; `config/config.exampl
 | `session.idle_minutes` | Cierre de sesión por inactividad (240 por defecto). |
 | `google.client_id`, `google.client_secret` | Opcional (1.6). Cliente OAuth de Google Cloud para Google Calendar y Google Tasks. Sin estas claves la conexión con Google no aparece y todo lo demás funciona igual. Ver «Google Calendar y Google Tasks». |
 | `google.redirect_uri` | Opcional. Solo si la URL de retorno no es `app.url` + `/google/callback`. |
-| `app.key` | Opcional. Clave de 32 bytes en base64 para cifrar los tokens de Google. Si no existe, Borealis crea `storage/app.key` (permisos 0600) la primera vez. Si se pierde, cada persona solo tiene que volver a conectar Google. |
+| `app.key` | Llave de 32 bytes en base64 que cifra los secretos guardados (Google, correo, avisos, webhooks). Desde 1.16.4 el instalador la escribe aquí. En instalaciones anteriores está en `storage/app.key`. Si se pierde, hay que volver a configurar el correo, Google y los webhooks, y cada persona debe reactivar sus avisos. |
+| `app.trusted_proxies` | Opcional (1.16.4). IP del proxy o CDN, o `['*']`, para usar la IP real de cada persona en los límites de inicio de sesión. |
 
 El ZIP **no incluye** contraseñas, claves ni credenciales: el instalador las pide y genera un nombre de sesión aleatorio por instalación.
 
@@ -405,11 +411,11 @@ Se importan personas (unificadas por correo), equipos, proyectos con sus estados
 | Los avisos al móvil llegan solo cuando alguien abre Borealis | La tarea programada no corre. Administración › Notificaciones dice desde cuándo y muestra el último error. Revisa que el comando use la versión de PHP del sitio (`/usr/bin/php8.2`, no `php`) y mira `storage/logs/notify.log`. Si el alojamiento solo permite URLs, usa `/cron/run?token=…`. |
 | Un dispositivo dejó de recibir avisos | Administración › Notificaciones › Envíos muestra el motivo. Un 401/403 indica un problema con las claves VAPID (¿se borró `storage/vapid.json`?). Quien tenga el problema puede volver a pulsar «Activar en este dispositivo». |
 | Discord o GitHub muestran un error en «Todo a mano» | El mensaje dice la causa (webhook eliminado, token caducado, límite de consultas, sin conexión). El resto de Borealis no se ve afectado. |
-| Olvidé la contraseña de administración | Otra cuenta con permiso «Gestionar personas» puede restablecerla en Administración › Personas. |
+| Olvidé la contraseña de administración | «¿Olvidaste tu contraseña?» en el inicio de sesión (necesita el correo configurado), u otra cuenta con permiso de administrar personas la restablece en Administración › Usuarios. |
 
 ## 10. Pruebas
 
-Ver [`docs/PRUEBAS.md`](docs/PRUEBAS.md) para los resultados reales y cómo repetirlas.
+Paso a paso en [`docs/DESARROLLO.md`](docs/DESARROLLO.md) › Pruebas; resultados en [`docs/PRUEBAS.md`](docs/PRUEBAS.md). En GitHub, las pruebas unitarias y de integración corren solas en cada cambio (pestaña «Actions»).
 
 ```bash
 # Servidor de prueba con una base de datos VACÍA
