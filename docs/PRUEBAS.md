@@ -1,12 +1,19 @@
-# Resultados de pruebas — Borealis 1.15.1
+# Resultados de pruebas — Borealis 1.16.0
 
-Resultados **reales**, generados por las propias pruebas el 24/11/2026, instalando desde el ZIP. Nada de esta lista se marcó a mano.
+Resultados **reales**, generados por las propias pruebas el 25/11/2026. La integración se ejecutó instalando desde el ZIP; el navegador, desde una copia idéntica a él (`git ls-files`). Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 1122 | 0 | 1122 |
-| Navegador Chromium (`tests/e2e/run.mjs`) | 331 | 0 | 331 |
-| Motor interno de avisos con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 12 | 0 | 12 |
+| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1143 | 0 | 1143 |
+| Navegador Chromium (`tests/e2e/run.mjs`) | 336 | 0 | 336 |
+| Motor sin cron con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 14 | 0 | 14 |
+| Motor sin cron con Apache + mod_php reales (`SERVER=apache tests/fpm/engine.sh`) | 15 | 0 | 15 |
+
+**Novedades 1.16:**
+- **Integración:** grupos «1.16 · …» (`tests/integration/v116.php`, 21 comprobaciones). Cubren `/cron/ping` sin sesión y sus límites, el modo compatible de Apache, las preferencias por defecto y su paso desde 1.15, la asignación y el cambio de fecha que llegan cifrados con la sesión terminada, que nada se repite y la pantalla de Administración.
+- **Navegador:** un aviso que llega con una confirmación abierta se ve encima y se puede pulsar. En la primera ejecución esta prueba falló, porque el popover quedaba inerte detrás del diálogo; se corrigió moviendo la caja dentro del diálogo. También se comprueba que el service worker está activo y que `/cron/ping` responde.
+- **Servidores reales:** con una sola visita anónima, el aviso llegó al teléfono de prueba en unos 15 segundos, sin cron ni sesión. Después se cortó el motor y `/cron/ping` lo reanudó. Con Apache + mod_php, que es el caso que antes no funcionaba, pasaron 15 de 15 comprobaciones.
+- **No probado:** un teléfono real con Google, Apple o Mozilla, un servidor LiteSpeed real y el alojamiento de producción.
 
 **Entorno:** PHP 8.3.6 (servidor integrado de PHP), MariaDB 10.11, Chromium (Playwright), Linux. Cada ejecución parte de una base de datos vacía e instala Borealis desde el instalador web.
 
