@@ -2,7 +2,7 @@
 Options -Indexes
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^(app|config|database|storage|bin|tests|docs)(/|$) - [F,L]
+  RewriteRule ^(app|config|database|storage|storage-[a-f0-9]+|bin|tests|docs)(/|$) - [F,L]
   RewriteRule ^((?!public/).*)$ public/$1 [L]
 </IfModule>
 <FilesMatch "^\.|\.(sql|md|log|lock)$">

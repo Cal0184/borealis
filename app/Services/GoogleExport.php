@@ -199,7 +199,7 @@ final class GoogleExport
     /** Private mark of the person's events (two people may send to one shared calendar). Not guessable. */
     public static function owner(int $uid): string
     {
-        return substr(Secrets::hmac("gexp-owner|$uid"), 0, 20);
+        return substr(Secrets::stableHmac("gexp-owner|$uid"), 0, 20);
     }
 
     /**
@@ -228,7 +228,7 @@ final class GoogleExport
     /** Google event id: base32hex (0-9, a-v), stable for the same person, item and calendar. */
     public static function eventId(int $uid, string $ref, string $calendarId): string
     {
-        return 'brl' . substr(Secrets::hmac("gexp|$uid|$ref|$calendarId"), 0, 40);
+        return 'brl' . substr(Secrets::stableHmac("gexp|$uid|$ref|$calendarId"), 0, 40);
     }
 
     // ------------------------------------------------------------------ sending

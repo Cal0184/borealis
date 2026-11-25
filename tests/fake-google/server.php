@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli-server') exit(1); // 1.16.5: never runs when requested from the web
 
 /*
  * A local stand-in for Google's OAuth, Calendar v3 and Tasks v1 endpoints, ONLY for the test-suite.

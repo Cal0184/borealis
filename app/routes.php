@@ -112,6 +112,7 @@ $r->delete('/api/priorities/{id}', [Api\WorkspaceApi::class, 'deletePriority']);
 $r->post('/api/backups', [Api\WorkspaceApi::class, 'backup']);
 $r->post('/api/migrations', [Api\WorkspaceApi::class, 'migrate']);
 $r->post('/api/admin/exposure-check', [Api\WorkspaceApi::class, 'exposureCheck']);
+$r->post('/api/admin/protect-storage', [Api\WorkspaceApi::class, 'protectStorage']);
 $r->post('/api/import/legacy', [Api\WorkspaceApi::class, 'importLegacy']);
 $r->patch('/api/profile', [Api\WorkspaceApi::class, 'profile']);
 $r->post('/api/profile/photo', [Api\WorkspaceApi::class, 'photo']);

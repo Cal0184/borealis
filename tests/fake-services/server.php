@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli-server') exit(1); // 1.16.5: never runs when requested from the web
 
 /*
  * Local stand-ins, ONLY for the test-suite, of three outside services Borealis 1.8 talks to:

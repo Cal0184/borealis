@@ -35,7 +35,7 @@ if (!Activity::v115()) { fwrite(STDERR, "Falta la migración 017_v115: ejecuta p
 
 $db = Database::get();
 $until = date('Y-m-d 00:00:00', strtotime("-$months months"));
-$dir = BASE_PATH . '/storage/audit-archive';
+$dir = storage_path('audit-archive');
 if (!$dry && !is_dir($dir) && !@mkdir($dir, 0750, true)) { fwrite(STDERR, "No se pudo crear $dir\n"); exit(1); }
 
 foreach ($db->column('SELECT id FROM workspaces ORDER BY id') as $ws) {

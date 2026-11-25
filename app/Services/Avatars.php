@@ -25,7 +25,7 @@ final class Avatars
 
     public static function dir(): string
     {
-        return rtrim((string)config('uploads.path', BASE_PATH . '/storage/uploads'), '/') . '/avatars';
+        return rtrim((string)config('uploads.path', storage_path('uploads')), '/') . '/avatars';
     }
 
     /** The server can make the photos (PHP GD with WebP). */

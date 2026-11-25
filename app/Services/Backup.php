@@ -11,7 +11,7 @@ final class Backup
 {
     public static function dir(): string
     {
-        $d = BASE_PATH . '/storage/backups';
+        $d = storage_path('backups');
         if (!is_dir($d)) mkdir($d, 0750, true);
         return $d;
     }
@@ -106,7 +106,7 @@ final class Backup
         $zip->addFile($sql, 'base-de-datos/' . basename($sql));
         $cfg = BASE_PATH . '/config/config.php';
         if (is_file($cfg)) $zip->addFile($cfg, 'config/config.php');
-        $storage = BASE_PATH . '/storage';
+        $storage = storage_path();
         $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($storage, \FilesystemIterator::SKIP_DOTS));
         foreach ($it as $f) {
             if (!$f->isFile()) continue;
@@ -120,6 +120,8 @@ final class Backup
             . "1. Sube los archivos de Borealis al servidor nuevo.\r\n"
             . "2. Copia config/config.php y la carpeta storage/ de este ZIP encima (cambia en config.php el usuario,\r\n"
             . "   la contraseña y el nombre de la base de datos si son otros, y 'url' si cambia el dominio).\r\n"
+            . "   No copies config/storage.php del servidor anterior. Si el servidor nuevo ignora los .htaccess (Nginx),\r\n"
+            . "   pulsa después Administración › Datos › «Proteger ahora».\r\n"
             . "3. Importa base-de-datos/*.sql en la base de datos vacía (phpMyAdmin › Importar).\r\n\r\n"
             . "Este ZIP contiene la llave de cifrado y los datos de todas las personas: guárdalo en un lugar seguro.\r\n");
         if (!$zip->close()) throw new \RuntimeException('No se pudo terminar el ZIP (¿disco lleno?).');

@@ -605,7 +605,7 @@ final class Monitoring
      */
     public static function scan(int $wsId): array
     {
-        $lockFile = BASE_PATH . '/storage/monitor-' . $wsId . '.lock';
+        $lockFile = storage_path('monitor-') . $wsId . '.lock';
         $lock = @fopen($lockFile, 'c');
         if ($lock && !flock($lock, LOCK_EX | LOCK_NB)) return ['skipped' => true];
         $db = Database::get();

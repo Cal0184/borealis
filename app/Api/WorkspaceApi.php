@@ -169,6 +169,38 @@ final class WorkspaceApi
         return Response::ok(['status' => $res['status'], 'reload' => true], $msg);
     }
 
+    /**
+     * 1.16.5 · Administración › Datos › «Proteger ahora»: a copy of the database, then the data folder moves
+     * where the web cannot reach it, the encryption key is renewed and the check runs again. Nothing to do by FTP.
+     */
+    public function protectStorage(Request $r): Response
+    {
+        if (!(int)(Auth::user()['is_instance_admin'] ?? 0)) throw HttpException::forbidden('Solo la administración de la instalación.');
+        @set_time_limit(0);
+        $done = [];
+        $where = \Borealis\Services\StorageMover::placement();
+        if ($where !== 'outside') {
+            try {
+                $m = \Borealis\Services\StorageMover::protect();
+            } catch (\RuntimeException $e) {
+                throw HttpException::conflict($e->getMessage());
+            }
+            $done[] = $m['kind'] === 'outside' ? 'los datos quedaron fuera de la carpeta web' : 'los datos quedaron en una carpeta con nombre secreto';
+            \Borealis\Services\Activity::security('storage_moved', (int)Auth::id(), 'Movió la carpeta de datos privados (' . ($m['kind'] === 'outside' ? 'fuera de la web' : 'nombre secreto') . ')', $r->ip());
+        }
+        $rotated = false;
+        if (\Borealis\Security\Secrets::rotatable() && ($r->input('rotate', '1') !== '0')) {
+            Backup::create(null, 'pre-llave');
+            \Borealis\Security\Secrets::rotate();
+            $rotated = true;
+            $done[] = 'la llave de cifrado es nueva';
+            \Borealis\Services\Activity::security('key_rotated', (int)Auth::id(), 'Renovó la llave de cifrado', $r->ip());
+        }
+        $res = \Borealis\Services\Exposure::check();
+        $msg = ($done ? 'Listo: ' . implode(' y ', $done) . '. ' : '') . match ($res['status']) { 'exposed' => 'Todavía se puede descargar algo: mira el detalle.', 'safe' => 'Comprobado: ya no se puede descargar.', default => 'No se pudo comprobar desde el servidor.' };
+        return Response::ok(['status' => $res['status'], 'rotated' => $rotated, 'reload' => true], $msg);
+    }
+
     /** Applies pending migrations from the browser (for hosting without shell access). Always backs up first. */
     public function migrate(Request $r): Response
     {

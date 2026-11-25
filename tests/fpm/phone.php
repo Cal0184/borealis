@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+if (PHP_SAPI !== 'cli') exit(1); // 1.16.5: never runs when requested from the web
 /*
  * 1.15 · A «phone» for tests/fpm/engine.sh: creates browser push keys and subscribes Ana's account
  * (setup), and later decrypts what the fake push service received (read), as the browser would.

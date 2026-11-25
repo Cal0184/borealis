@@ -36,7 +36,7 @@ final class Push
 
     private static function keyFile(): string
     {
-        return BASE_PATH . '/storage/vapid.json';
+        return storage_path('vapid.json');
     }
 
     /** Server key pair: ['public' => raw 65 bytes, 'pem' => private key PEM]. Created on first use. */

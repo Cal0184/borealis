@@ -59,7 +59,7 @@ final class Heartbeat
 
     private static function file(): string
     {
-        return BASE_PATH . '/storage/heartbeat.json';
+        return storage_path('heartbeat.json');
     }
 
     /** ['chain' => ?string, 'beat' => ?int, 'started' => ?int, 'ticks' => int, 'error' => ?string, 'stopped' => ?string, 'attempt' => ?int] */

@@ -163,7 +163,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
     </header>
     <main class="content<?= !empty($wide) ? ' wide' : '' ?>" id="page" data-region tabindex="-1">
       <?php if ((int)(\Borealis\Core\Auth::user()['is_instance_admin'] ?? 0) && (\Borealis\Services\Exposure::cached()['status'] ?? null) === 'exposed'): ?>
-      <div class="notice notice--danger" role="alert"><?= icon('alert', 'sm') ?> <strong>Peligro:</strong> la carpeta privada <code>storage/</code> (llave de cifrado, copias de la base de datos, archivos) se puede descargar desde internet. <a href="<?= e(url('/admin/data')) ?>#seguridad">Ver qué hacer</a></div>
+      <div class="notice notice--danger" role="alert"><?= icon('alert', 'sm') ?> <strong>Peligro:</strong> la carpeta de datos privados de Borealis (llave de cifrado, copias de la base de datos, archivos) se puede descargar desde internet. <a href="<?= e(url('/admin/data')) ?>#seguridad">Protegerlos ahora</a></div>
       <?php endif; ?>
       <?php /* 1.16: on every page (before: only Inicio), until the browser was asked; «Ahora no» = 7 days */ ?>
       <div class="notice push-nudge row wrap" data-push-nudge hidden>
