@@ -120,6 +120,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
     <?php endif; ?>
     <div class="sidebar-foot">
       <div class="sidebar-forest" aria-hidden="true"></div>
+      <?php $supportLink = \Borealis\Services\Support::link(); if ($supportLink): ?><a class="nav-collapse nav-support" href="<?= e($supportLink) ?>" data-support title="Escribir al soporte"><?= icon('mail', 'sm') ?> <span class="nav-text">Correo al soporte</span></a><?php endif; ?>
       <button class="nav-collapse" type="button" data-nav-compact aria-pressed="<?= !empty($s['user']['prefs']['nav_compact']) ? 'true' : 'false' ?>" title="Barra lateral compacta"><?= icon('chevron-left', 'sm') ?> <span class="nav-text">Compactar barra</span></button>
       <a class="me-card" href="<?= e(url('/profile')) ?>"><span id="sidebar-me-photo" data-region><?= avatar($s['user'], 'sm') ?></span><span><strong class="truncate"><?= e($s['user']['name']) ?></strong><span class="truncate"><?= e($s['workspace']['role_name'] ?? 'Mi perfil') ?></span></span></a>
     </div>
@@ -153,6 +154,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
             <a href="<?= e(url('/profile')) ?>" role="menuitem"><?= icon('user') ?> Mi perfil y preferencias</a>
             <button type="button" role="menuitem" data-tour-start><?= icon('play') ?> Ver el tutorial</button>
             <a href="<?= e(url('/people/' . $s['user']['id'])) ?>" role="menuitem"><?= icon('eye') ?> Mi ficha de integrante</a>
+            <?php if ($supportLink): ?><a href="<?= e($supportLink) ?>" role="menuitem" data-support><?= icon('mail') ?> Correo al soporte</a><?php elseif (\Borealis\Security\Policy::can('workspace.manage')): ?><a href="<?= e(url('/admin#soporte')) ?>" role="menuitem" class="muted"><?= icon('mail') ?> Configurar correo al soporte</a><?php endif; ?>
             <hr>
             <form method="post" action="<?= e(url('/logout')) ?>"><?= csrf_field() ?><button type="submit" role="menuitem"><?= icon('logout') ?> Cerrar sesión</button></form>
           </div>

@@ -37,6 +37,17 @@
     </div>
   </section>
 </div>
+<section class="card mt" id="soporte"><div class="card-head"><h2><?= icon('mail') ?> Correo al soporte</h2></div><div class="card-body">
+  <form data-api="/api/support/settings" data-method="PATCH">
+    <div class="form-error" data-form-error></div>
+    <p class="muted small">Con un correo aquí, todos ven el botón «Correo al soporte» en el menú de su cuenta, en la barra lateral y en la página de inicio de sesión. Abre su programa de correo con un mensaje listo: asunto, una pauta para contar el problema y los datos que el soporte necesita (quién escribe, espacio, página, versión y navegador). Borealis no envía nada por su cuenta, así que funciona aunque el correo de Borealis no esté configurado.</p>
+    <div class="grid grid-2">
+      <div class="field"><label for="sp-e">Correo del soporte</label><input class="input" type="email" id="sp-e" name="email" value="<?= e((string)($ws['settings']['support']['email'] ?? '')) ?>" maxlength="190" placeholder="<?= e((string)config('support.email', 'soporte@ejemplo.cl')) ?>"><span class="hint">Vacío = se oculta el botón<?= config('support.email') ? ' (o se usa el de config.php)' : '' ?>.</span><span class="error" data-error-for="email"></span></div>
+      <div class="field"><label for="sp-s">Asunto</label><input class="input" id="sp-s" name="subject" value="<?= e((string)($ws['settings']['support']['subject'] ?? '')) ?>" maxlength="120" placeholder="Soporte Borealis"><span class="hint">Se añade el nombre del espacio al final.</span><span class="error" data-error-for="subject"></span></div>
+    </div>
+    <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar</button><?php if ($support['email']): ?> <a class="btn" href="<?= e(\Borealis\Services\Support::mailto($support['email'], $support['subject'], null, $ws, absolute_url('/admin'))) ?>"><?= icon('mail', 'sm') ?> Probar el botón</a><?php endif; ?></div>
+  </form>
+</div></section>
 <?php $mc = \Borealis\Services\Monitoring::settings(); $num = fn(string $k, string $label, string $unit, string $hint = '') => '<div class="field"><label for="mc-' . $k . '">' . e($label) . '</label><div class="row"><input class="input" type="number" id="mc-' . $k . '" name="' . $k . '" value="' . (int)$mc[$k] . '" style="width:110px" required><span class="muted small">' . e($unit) . '</span></div>' . ($hint ? '<span class="hint">' . e($hint) . '</span>' : '') . '<span class="error" data-error-for="' . $k . '"></span></div>'; ?>
 <section class="card mt" id="monitoreo"><div class="card-head"><h2><?= icon('target') ?> Umbrales de monitoreo</h2><a class="btn btn--sm btn--ghost" href="<?= e(url('/monitoring')) ?>">Ir a Monitoreo</a></div><div class="card-body">
   <form data-api="/api/monitoring/settings" data-method="PATCH">

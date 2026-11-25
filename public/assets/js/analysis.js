@@ -1,7 +1,7 @@
 // Análisis (1.13): estimate suggestions next to «Tiempo estimado» and the scenario simulator.
 // Nothing here saves data on its own: «Usar» only fills the field (the person saves it), and a
 // scenario is applied only after an explicit confirmation.
-import { api, toast, onInit, refresh } from './core.js?v=1.16.2';
+import { api, toast, onInit, refresh } from './core.js?v=1.16.3';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hours = (x) => (x === null || x === undefined ? '—' : `${String(Math.round(x * 10) / 10).replace('.', ',')} h`);

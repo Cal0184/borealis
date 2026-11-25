@@ -89,6 +89,23 @@ final class WorkspaceApi
         return Response::ok([], 'Contraseña restablecida');
     }
 
+    /** 1.16.3 · Administración › Usuarios › «Eliminar usuario» (with a full backup first). */
+    public function deleteMember(Request $r): Response
+    {
+        if (!filter_var($r->input('confirm'), FILTER_VALIDATE_BOOLEAN)) throw HttpException::invalid(['confirm' => 'Marca la casilla para confirmar.']);
+        $to = $r->input('reassign_to');
+        $res = \Borealis\Services\MemberDeletion::delete($r->intParam('id'), is_numeric($to) && (int)$to > 0 ? (int)$to : null, (string)$r->input('reason', ''));
+        $msg = "Se eliminó a {$res['name']}" . ($res['reassigned_to'] ? ". Su trabajo abierto pasó a {$res['reassigned_to']}" : '') . ". Copia de seguridad: {$res['backup']}";
+        return Response::ok($res + ['redirect' => url('/admin/members')], $msg);
+    }
+
+    /** 1.16.3 · «Correo al soporte»: the address (and an optional note) set in Administración › Ajustes. */
+    public function supportSettings(Request $r): Response
+    {
+        $saved = \Borealis\Services\Support::save($r->input());
+        return Response::ok($saved, $saved['email'] ? 'Correo de soporte guardado' : 'Se quitó el correo de soporte');
+    }
+
     public function invite(Request $r): Response
     {
         $inv = Workspaces::invite($r->input());

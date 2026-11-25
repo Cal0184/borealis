@@ -46,6 +46,8 @@ return [
     //     'heartbeat_url' => '',          // only if the server reaches itself by another address
     //     'web_fallback' => true,         // false: visits and /cron/ping do not start the job
     // ],
+    // 1.16.3 (optional): «Correo al soporte» for the whole installation. Administración › Ajustes wins per workspace.
+    // 'support' => ['email' => 'soporte@example.cl'],
     // 1.9 (optional): e-mail notices. Leave it out and Borealis sends no e-mail (and says so).
     // Use a real mailbox of your domain (HestiaCP › Mail). Port 587 = STARTTLS, 465 = SSL.
     // The password can also go in the BOREALIS_SMTP_PASSWORD environment variable instead of here.

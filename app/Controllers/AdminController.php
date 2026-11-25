@@ -35,7 +35,7 @@ final class AdminController
             if (Policy::can('roles.manage')) return Response::redirect(url('/admin/roles'));
             $this->guard('workspace.manage');
         }
-        return View::page('admin/settings', $this->base('settings') + ['priorities' => Workspaces::priorities()]);
+        return View::page('admin/settings', $this->base('settings') + ['priorities' => Workspaces::priorities(), 'support' => \Borealis\Services\Support::settings()]);
     }
 
     public function members(Request $r): Response
@@ -45,6 +45,7 @@ final class AdminController
             'members' => Workspaces::members(), 'roles' => Workspaces::roles('workspace'), 'invites' => Workspaces::pendingInvitations(), 'teams' => Teams::list(),
             'isOwner' => Policy::workspace()['role_key'] === 'owner',
             'instanceAdmin' => $ia = (bool)(int)(Auth::user()['is_instance_admin'] ?? 0), 'ghosts' => $ia ? \Borealis\Services\Ghosts::list() : [],
+            'impact' => \Borealis\Services\MemberDeletion::impact(),
         ]);
     }
 
