@@ -1,4 +1,4 @@
-# Estado de funciones — Borealis 1.16.0
+# Estado de funciones — Borealis 1.16.3
 
 **Criterio:** una función aparece como *Implementado y probado* solo si una prueba automatizada la ejerció de verdad y pasó (ver [PRUEBAS.md](PRUEBAS.md)). Que su pantalla abra sin errores no cuenta como probarla. Lo que solo se revisó leyendo el código aparece como *pendiente de prueba*.
 
@@ -8,6 +8,14 @@
 | 🟡 Implementado, pendiente de prueba | Existe y su pantalla carga, pero ninguna prueba ejercita su comportamiento |
 | 🔧 En desarrollo | Parcial |
 | ⏳ Pendiente | No incluido todavía |
+
+## Novedades de 1.16.3
+
+| Función | Estado | Notas |
+|---|---|---|
+| Eliminar usuarios (Administración › Usuarios) | ✅ | Permisos, confirmación, no a sí mismo, copia previa, trabajo abierto reasignado, historial conservado, cuenta cerrada y sesión cortada, registro maestro, correo reutilizable |
+| Eliminar a alguien que usa otros espacios | 🟡 | Solo sale de este espacio; la cuenta sigue. Lo cubre el código, no una prueba |
+| «Correo al soporte» (menú de la cuenta, barra lateral, inicio de sesión) | ✅ | Configuración, permisos, validación, enlace mailto con asunto y datos, oculto sin correo |
 
 ## Novedades de 1.16
 

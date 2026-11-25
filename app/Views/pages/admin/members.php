@@ -43,6 +43,22 @@
               <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--primary" type="submit">Guardar cambios</button></div>
             </form>
           </dialog>
+          <dialog class="modal" id="dlg-pass-<?= $uid ?>" aria-labelledby="dp-<?= $uid ?>">
+            <form data-api="/api/members/<?= $uid ?>/password" data-close data-reset>
+              <div class="modal-head"><h2 id="dp-<?= $uid ?>">Nueva contraseña para <?= e($m['name']) ?></h2><button type="button" class="btn btn--ghost btn--icon" data-close-dialog aria-label="Cerrar"><?= icon('x') ?></button></div>
+              <div class="modal-body"><div class="form-error" data-form-error></div>
+                <div class="field"><label for="pw-<?= $uid ?>">Contraseña temporal</label><input class="input" type="text" id="pw-<?= $uid ?>" name="password" required minlength="8" autocomplete="off"><span class="hint">Compártela por un canal seguro y pide que la cambie en su perfil.</span><span class="error" data-error-for="password"></span></div></div>
+              <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--primary" type="submit">Restablecer</button></div>
+            </form>
+          </dialog>
+        <?php endif; ?>
+      </td>
+    </tr>
+  <?php endforeach; ?>
+  </tbody>
+</table></div></section>
+<?php // 1.16.3 · «Eliminar usuario» dialogs live outside the table, so a row never contains other people's names
+foreach ($members as $m): $uid = (int)$m['id']; if ($uid === Auth::id() || ($m['role_key'] === 'owner' && !$isOwner)) continue; ?>
           <?php $imp = $impact[$uid] ?? []; ?>
           <dialog class="modal" id="dlg-del-<?= $uid ?>" aria-labelledby="dd-<?= $uid ?>">
             <form data-api="/api/members/<?= $uid ?>/delete" data-close>
@@ -64,20 +80,7 @@
               <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--danger-solid" type="submit"><?= icon('trash', 'sm') ?> Eliminar usuario</button></div>
             </form>
           </dialog>
-          <dialog class="modal" id="dlg-pass-<?= $uid ?>" aria-labelledby="dp-<?= $uid ?>">
-            <form data-api="/api/members/<?= $uid ?>/password" data-close data-reset>
-              <div class="modal-head"><h2 id="dp-<?= $uid ?>">Nueva contraseña para <?= e($m['name']) ?></h2><button type="button" class="btn btn--ghost btn--icon" data-close-dialog aria-label="Cerrar"><?= icon('x') ?></button></div>
-              <div class="modal-body"><div class="form-error" data-form-error></div>
-                <div class="field"><label for="pw-<?= $uid ?>">Contraseña temporal</label><input class="input" type="text" id="pw-<?= $uid ?>" name="password" required minlength="8" autocomplete="off"><span class="hint">Compártela por un canal seguro y pide que la cambie en su perfil.</span><span class="error" data-error-for="password"></span></div></div>
-              <div class="modal-foot"><button type="button" class="btn" data-close-dialog>Cancelar</button><button class="btn btn--primary" type="submit">Restablecer</button></div>
-            </form>
-          </dialog>
-        <?php endif; ?>
-      </td>
-    </tr>
-  <?php endforeach; ?>
-  </tbody>
-</table></div></section>
+<?php endforeach; ?>
 
 <?php if ($instanceAdmin): ?>
 <section class="card mb ghost-card" id="ghosts">
