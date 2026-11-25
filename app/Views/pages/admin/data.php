@@ -14,15 +14,45 @@
     <?php else: ?><p class="muted" style="margin:0">La base de datos está al día.</p><?php endif; ?>
   </div></section>
 </div>
-<?php if ($instanceAdmin): $mail = \Borealis\Services\Mailer::describe(); ?>
-<section class="card mt" id="correo"><div class="card-head"><h2><?= icon('mail') ?> Correo</h2>
-  <?php if ($mail['configured']): ?><button class="btn btn--sm" type="button" data-call="/api/mail/test"><?= icon('mail', 'sm') ?> Enviar correo de prueba</button><?php endif; ?></div><div class="card-body">
-  <?php if (!$mail['configured']): ?>
-    <p style="margin-top:0">Borealis todavía no envía correos. Para activarlo, añade la sección <code>mail</code> en <code>config/config.php</code> con un buzón de tu dominio (pasos en <code>docs/CONFIGURACION-1.9.md</code>). Mientras tanto, los avisos siguen en la campana y en el móvil.</p>
+<?php if ($instanceAdmin): $mail = \Borealis\Services\Mailer::describe(); $msrc = \Borealis\Services\MailSettings::source(); $mf = \Borealis\Services\MailSettings::form(); $mst = \Borealis\Services\MailSettings::status(); ?>
+<section class="card mt" id="correo" data-region><div class="card-head"><h2><?= icon('mail') ?> Correo</h2>
+  <?php if ($mail['configured']): ?><button class="btn btn--sm" type="button" data-call="/api/mail/test"><?= icon('mail', 'sm') ?> Enviar correo de prueba</button><?php endif; ?></div><div class="card-body" data-mail-state="<?= $mail['configured'] ? 'on' : 'off' ?>">
+  <?php if ($mail['configured']): ?>
+    <p style="margin-top:0"><span class="badge success">Activo</span> <?= $mail['transport'] === 'smtp' ? 'SMTP ' . e($mail['host']) . ':' . (int)$mail['port'] . ' · ' . ($mail['encryption'] === 'ssl' ? 'SSL' : ($mail['encryption'] === 'tls' ? 'STARTTLS' : 'sin cifrado (solo local)')) . ($mail['username'] ? ' · usuario ' . e($mail['username']) : '') : 'Sistema de correo del servidor (mail() de PHP)' ?> · remitente <?= e($mail['from_name']) ?> &lt;<?= e($mail['from']) ?>&gt;</p>
   <?php else: ?>
-    <p style="margin-top:0"><?= $mail['transport'] === 'smtp' ? 'SMTP ' . e($mail['host']) . ':' . (int)$mail['port'] . ' · ' . ($mail['encryption'] === 'ssl' ? 'SSL' : ($mail['encryption'] === 'tls' ? 'STARTTLS' : 'sin cifrado (solo local)')) . ($mail['username'] ? ' · usuario ' . e($mail['username']) : '') : 'Sistema de correo del servidor (mail() de PHP)' ?> · remitente <?= e($mail['from_name']) ?> &lt;<?= e($mail['from']) ?>&gt;</p>
-    <p class="small muted">«Enviar correo de prueba» manda un mensaje a tu dirección. Los avisos por correo los envía el cron (<code>bin/notify.php</code>).</p>
+    <p style="margin-top:0"><span class="badge warn">Sin configurar</span> Borealis todavía no envía correos. Complétalo aquí: no hace falta editar archivos por FTP.</p>
   <?php endif; ?>
+  <?php if ($mst['ok'] || $mst['error']): ?>
+    <p class="small" data-mail-status><?= $mst['ok'] ? 'Último envío correcto: ' . e(fmt_datetime($mst['ok'])) . '. ' : '' ?><?php if ($mst['error'] && (!$mst['ok'] || $mst['error_at'] > $mst['ok'])): ?><span class="text-danger">Último error (<?= e(fmt_datetime($mst['error_at'])) ?>): <?= e($mst['error']) ?></span><?php endif; ?></p>
+  <?php endif; ?>
+  <?php if ($msrc === 'config'): ?>
+    <p class="small muted">Está definido en <code>config/config.php</code> (sección <code>mail</code>). Para configurarlo desde aquí, quita esa sección del archivo.</p>
+  <?php else: ?>
+    <form data-api="/api/mail/settings" class="mail-form" autocomplete="off">
+      <div class="form-error" data-form-error></div>
+      <div class="grid grid-2">
+        <div class="field"><label for="m-preset">Proveedor</label><select class="input" id="m-preset" data-mail-preset>
+          <option value="">Elegir para rellenar…</option>
+          <?php foreach (\Borealis\Services\MailSettings::PRESETS as $k => [$lbl, $h, $p, $en]): ?><option value="<?= e($k) ?>" data-host="<?= e($h) ?>" data-port="<?= (int)$p ?>" data-enc="<?= e($en) ?>"><?= e($lbl) ?></option><?php endforeach; ?>
+        </select></div>
+        <div class="field"><label for="m-t">Cómo enviar</label><select class="input" id="m-t" name="transport">
+          <option value="smtp"<?= $mf['transport'] === 'smtp' ? ' selected' : '' ?>>Buzón SMTP (recomendado)</option>
+          <option value="sendmail"<?= $mf['transport'] === 'sendmail' ? ' selected' : '' ?>>Correo del servidor (mail() de PHP)</option>
+          <?php if ($msrc === 'admin'): ?><option value="none">Desactivar el correo</option><?php endif; ?>
+        </select></div>
+        <div class="field"><label for="m-h">Servidor SMTP</label><input class="input" id="m-h" name="host" value="<?= e($mf['host']) ?>" placeholder="mail.tu-dominio.cl"><span class="error" data-error-for="host"></span></div>
+        <div class="field"><label for="m-p">Puerto</label><select class="input" id="m-p" name="port"><?php foreach ([465 => '465 · SSL', 587 => '587 · STARTTLS', 2525 => '2525 · STARTTLS', 25 => '25'] as $pv => $pl): ?><option value="<?= $pv ?>"<?= (int)$mf['port'] === $pv ? ' selected' : '' ?>><?= $pl ?></option><?php endforeach; ?></select><span class="error" data-error-for="port"></span></div>
+        <div class="field"><label for="m-u">Usuario</label><input class="input" id="m-u" name="username" value="<?= e($mf['username']) ?>" placeholder="avisos@tu-dominio.cl" autocomplete="off"></div>
+        <div class="field"><label for="m-pw">Contraseña</label><input class="input" id="m-pw" name="password" type="password" autocomplete="new-password" placeholder="<?= $mf['has_password'] ? '•••••••• (guardada; escribe otra para cambiarla)' : '' ?>"></div>
+        <div class="field"><label for="m-f">Remitente</label><input class="input" id="m-f" name="from_address" type="email" value="<?= e($mf['from_address']) ?>" placeholder="avisos@tu-dominio.cl" required><span class="error" data-error-for="from_address"></span></div>
+        <div class="field"><label for="m-fn">Nombre del remitente</label><input class="input" id="m-fn" name="from_name" value="<?= e($mf['from_name']) ?>" maxlength="80"></div>
+      </div>
+      <input type="hidden" name="encryption" value="<?= e($mf['encryption']) ?>" data-mail-enc>
+      <p class="hint">La contraseña se guarda cifrada en <code>storage/mail.json</code> y nunca se muestra. Con Gmail o Microsoft 365 usa una «contraseña de aplicación». El remitente debe ser el mismo buzón (o uno de tu dominio), para que los correos no lleguen a spam. Al guardar se envía un correo de prueba a tu dirección.</p>
+      <div class="form-actions start"><button class="btn btn--primary" type="submit">Guardar y probar</button></div>
+    </form>
+  <?php endif; ?>
+  <p class="small muted">Los avisos por correo salen en el momento en que se crean (asignaciones, cambios, comentarios) y, para los recordatorios por hora, con la tarea programada. Cada persona elige qué recibe en Perfil › Notificaciones.</p>
 </div></section>
 <section class="card mt"><div class="card-head"><h2><?= icon('archive') ?> Copias de seguridad completas</h2>
   <button class="btn btn--primary btn--sm" data-call="/api/backups" data-confirm="Se generará una copia SQL completa de la base de datos en storage/backups." data-confirm-label="Crear copia" data-confirm-style="primary"><?= icon('plus', 'sm') ?> Crear copia ahora</button></div>

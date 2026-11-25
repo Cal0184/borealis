@@ -47,8 +47,8 @@ $job = $q("SELECT * FROM system_jobs WHERE name = 'notify'")->fetch(PDO::FETCH_A
 check('bin/notify.php deja constancia de cada ejecución (inicio, fin, resultado, origen «cli»)', $c1 === 0 && (int)($job['runs'] ?? 0) === $runs0 + 1 && $job['last_source'] === 'cli' && $job['last_ok_at'] && $job['cli_ok_at'] && !$job['last_error'], $o1 . ' ' . json_encode($job));
 check('…y sigue imprimiendo su resumen como antes', str_contains($o1, 'recordatorios') || str_contains($o1, 'avisos') || $o1 !== '', $o1);
 $admin->get('/admin/notifications');
-check('Administración › Notificaciones dice que la tarea programada funciona y cómo configurarla en HestiaCP', $admin->status === 200 && str_contains($admin->body, 'data-job-state="ok"') && str_contains($admin->body, 'bin/notify.php') && str_contains($admin->body, 'Cron Jobs'), snippet($admin));
-$cronUrl = preg_match('~curl -fsS &quot;([^&]+(?:&amp;[^&]+)*)&quot;~', $admin->body, $m) ? html_entity_decode($m[1]) : '';
+check('Administración › Notificaciones dice que la tarea programada funciona y cómo configurarla sin acceso al servidor (1.16)', $admin->status === 200 && str_contains($admin->body, 'data-job-state="ok"') && str_contains($admin->body, 'bin/notify.php') && str_contains($admin->body, 'cron-job.org') && str_contains($admin->body, 'Tareas Cron'), snippet($admin));
+$cronUrl = preg_match('~data-cron-url>([^<]+)<~', $admin->body, $m) ? html_entity_decode($m[1]) : '';
 $token = (string)(parse_url($cronUrl, PHP_URL_QUERY) ? (parse_str((string)parse_url($cronUrl, PHP_URL_QUERY), $qs) ?: ($qs['token'] ?? '')) : '');
 check('…y a la administración de la instalación le da la dirección /cron/run con su clave', strlen($token) >= 24 && str_contains($cronUrl, '/cron/run?token='), $cronUrl);
 check('La clave no se guarda en claro (storage/cron.json va cifrado)', $token !== '' && !str_contains((string)@file_get_contents($root . '/storage/cron.json'), $token));
@@ -336,7 +336,7 @@ check('Quien coordina asigna un trabajo rápido a otra persona y ella recibe el 
 $teaC->api('POST', '/api/tasks/' . (int)$qk['id'] . '/time', ['hours' => '1.5', 'work_date' => $day(0)]);
 check('En un trabajo rápido se registran horas', $teaC->status === 200 && $cnt('SELECT SUM(minutes) FROM time_entries WHERE task_id = ? AND deleted_at IS NULL', [(int)$qk['id']]) === 90, snippet($teaC));
 $admin->get('/projects');
-$listed = str_contains($admin->body, QuickName14());
+$listed = str_contains(substr($admin->body, (int)strpos($admin->body, 'id="page"')), QuickName14()); // 1.15: only the page, not the sidebar link
 $teaC->get('/quick');
 check('El espacio de trabajos rápidos no aparece entre los proyectos, pero tiene su propia página semanal', !$listed && $teaC->status === 200 && str_contains($teaC->body, 'Llamar al proveedor') && str_contains($teaC->body, 'Urgencia del cliente') && str_contains($teaC->body, 'data-quick-form'), snippet($teaC));
 $teaC->get('/');

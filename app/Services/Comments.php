@@ -17,13 +17,21 @@ final class Comments
             WHERE c.task_id = ? AND c.deleted_at IS NULL ORDER BY c.created_at, c.id', [$taskId]);
     }
 
-    public static function create(int $taskId, string $body): int
+    public static function create(int $taskId, string $body, bool $decision = false): int
     {
         $t = Tasks::find($taskId);
         Policy::authorizeProject($t['project'], 'comment.create');
         $v = Validator::check(['body' => $body], ['body' => 'required,string,max:10000']);
-        $id = Database::get()->insert('comments', ['task_id' => $taskId, 'user_id' => Auth::id(), 'body' => $v['body'], 'created_at' => now()]);
-        Activity::log('commented', 'task', $taskId, "Comentó en {$t['task_key']}", (int)$t['project_id'], $t['parent_id'] ? (int)$t['parent_id'] : $taskId);
+        $row = ['task_id' => $taskId, 'user_id' => Auth::id(), 'body' => $v['body'], 'created_at' => now()];
+        if ($decision && Activity::v115()) $row['is_decision'] = 1;
+        $id = Database::get()->insert('comments', $row);
+        if (!empty($row['is_decision'])) {
+            // 1.15: a decision is part of the project's memory: it goes to the log with its text
+            Activity::log('decision', 'task', $taskId, "Registró una decisión en {$t['task_key']}", (int)$t['project_id'], $t['parent_id'] ? (int)$t['parent_id'] : $taskId, [], null,
+                ['category' => 'project', 'after' => ['decisión' => mb_substr($v['body'], 0, 500)]]);
+        } else {
+            Activity::log('commented', 'task', $taskId, "Comentó en {$t['task_key']}", (int)$t['project_id'], $t['parent_id'] ? (int)$t['parent_id'] : $taskId);
+        }
         Database::get()->update('tasks', ['updated_at' => now()], 'id = ?', [$taskId]);
 
         $link = url('/t/' . $t['task_key']);
@@ -37,6 +45,9 @@ final class Comments
                 Notifications::send($uid, 'comment', Auth::user()['name'] . " comentó en {$t['task_key']}: {$t['title']}", $link, (int)$t['project_id'], $taskId, "comment:$id:$uid");
             }
         }
+        // 1.15: followers hear about it too, and whoever comments starts following the task
+        Watchers::notify($t, Auth::user()['name'] . (!empty($row['is_decision']) ? ' registró una decisión en ' : ' comentó en ') . "{$t['task_key']}: {$t['title']}", $mentioned, "comment:$id");
+        Watchers::add($taskId, (int)Auth::id());
         return $id;
     }
 

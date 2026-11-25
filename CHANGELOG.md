@@ -1,5 +1,143 @@
 # Cambios
 
+## 1.16.2 (25/11/2026)
+
+**Correo sin editar archivos por FTP.** Hasta ahora, activar los correos exigía editar la sección `mail` de `config/config.php`, y sin SSH eso significa descargar el archivo, modificarlo y volver a subirlo.
+
+**Configuración desde Administración › Datos › Correo:**
+- **Formulario:** proveedor (buzón del dominio, Gmail, Microsoft 365, Zoho, Brevo), servidor, puerto, usuario, contraseña y remitente.
+- **Contraseña:** se guarda cifrada en `storage/mail.json` y nunca se muestra.
+- **Prueba:** «Guardar y probar» envía al instante un correo de prueba y dice el motivo si no sale.
+- **Estado:** se ve el último envío correcto y el último error.
+- **Desactivar:** se puede desde la misma pantalla.
+- **Compatibilidad:** una sección `mail` en `config/config.php` sigue teniendo prioridad.
+
+**Envío al instante.** Asignaciones, cambios, comentarios y alertas salen por correo en el momento en que ocurren, no solo cuando corre la tarea programada (antes, además, había una espera de 2 minutos). Los recordatorios por hora siguen saliendo con la tarea programada, y nada se envía dos veces.
+
+**Todas las categorías por correo por defecto.** Antes solo estaban activadas las asignaciones, los vencimientos, los sprints y la capacidad. Quien tenía las preferencias antiguas sin cambiar pasa a las nuevas. Cada persona puede apagar lo que no quiera en Perfil › Notificaciones.
+
+## 1.16.1 (25/11/2026)
+
+Sin migraciones. Va en el mismo PR que la 1.16.0.
+
+**Un aviso que figura como «entregado» pero no aparece.** «Entregado» significa que el servicio del navegador (Google, Microsoft, Mozilla o Apple) aceptó el aviso. Lo muestra el navegador del dispositivo cuando está en marcha. En Windows, el Asistente de concentración o «No molestar» lo guarda en el centro de notificaciones, sin mostrarlo ni sonar. Para ver dónde se corta:
+- **Perfil › Notificaciones:** lista cada dispositivo con la fecha de activación, la última entrega y el último problema. Antes solo se veía cuántos había.
+- **«Probar con Borealis cerrado (30 s)»:** el servidor responde enseguida y envía la prueba 30 segundos después, así se puede cerrar todo y comprobar que llega desde el sistema.
+- **Más robusto:** si el navegador rechaza una opción de la notificación, el service worker la muestra igual, en versión simple.
+
+**Sonido y avisos que se quedan en pantalla** (Perfil › Notificaciones, ambos activados por defecto):
+- **«Con sonido»:** el aviso suena con el sonido de notificaciones del dispositivo y vibra en Android. Un aviso que reemplaza a otro vuelve a sonar. Con Borealis abierto y sin notificaciones del sistema, suena además un tono corto dentro de la página. Los navegadores no permiten un sonido propio en las notificaciones del sistema, así que se usa el del dispositivo.
+- **Asignaciones, vencimientos, vencidas y alertas de monitoreo:** se quedan en pantalla hasta cerrarlos (`requireInteraction`), en Windows, macOS, Linux y ChromeOS.
+
+## 1.16.0 (25/11/2026)
+
+Avisos con Borealis cerrado en un alojamiento administrado solo por FTP, sin SSH ni cron. No tiene migraciones nuevas. Guía: `docs/CONFIGURACION-1.16.md`. Auditoría y causas: `docs/INFORME-1.16.md`.
+
+**Causa principal corregida: el trabajo «después de responder» solo existía con PHP-FPM.** El motor interno (1.15.1), el respaldo por visitas (1.14) y el envío inmediato dependían de `fastcgi_finish_request()`. En alojamientos con LiteSpeed o Apache esa función no existe, así que el motor y el respaldo quedaban apagados y los recordatorios solo se creaban cuando alguien volvía a entrar.
+- **`app/Core/Background.php`:** cierra la respuesta y sigue trabajando con PHP-FPM, LiteSpeed (`litespeed_finish_request`) o Apache/otros (modo compatible: `Content-Length`, `Connection: close` e `ignore_user_abort`).
+- **Motor interno y respaldo por visitas:** activos en los tres tipos de servidor. El motor reintenta una vez antes de detenerse, y considera aceptado un latido en cuanto recibe «202», aunque el servidor retenga el resto de la respuesta.
+- **Prueba real:** con Apache + mod_php además de Nginx + PHP-FPM (`SERVER=apache tests/fpm/engine.sh`).
+
+**Los dispositivos mantienen vivo el motor.**
+- **`/cron/ping`:** dirección pública, sin sesión ni datos. Responde 204 y, como mucho, arranca el motor (una vez por minuto) y la tarea (una vez cada 2 minutos, nunca dos a la vez).
+- **Service worker:** llama a `/cron/ping` al recibir un aviso, al abrirlo y en la sincronización periódica del navegador (Chrome, Edge y Android con Borealis instalado). Si el alojamiento corta el motor, el siguiente aviso que llegue a cualquier dispositivo lo reanuda.
+- **Visitas:** una visita ejecuta la tarea si lleva más de 2 minutos sin ejecutarse (antes, 5).
+
+**Preferencias activadas por defecto.**
+- **Categorías:** todas llegan al dispositivo. Antes, cambios en proyectos, comentarios, capacidad y tareas que sigues había que activarlas a mano.
+- **Preferencias guardadas antes de 1.16:** quien no había cambiado nada pasa a las nuevas. Lo que alguien apagó a propósito se respeta.
+- **Horario de silencio:** apagado hasta que la persona lo elija. Antes venía activado de 22:00 a 07:00 y retenía los avisos de la noche.
+- **Permiso ya dado:** si el navegador ya lo concedió, el dispositivo se vuelve a vincular solo, salvo que la persona lo desactivara en ese dispositivo.
+- **Invitación a activar:** aparece en todas las páginas, no solo en Inicio. «Ahora no» la oculta una semana, no para siempre.
+
+**Confirmaciones abiertas.** Un `<dialog>` modal ocupa la capa superior del navegador, así que los avisos dentro de la página quedaban escondidos detrás de cualquier confirmación o formulario abierto. Ahora la caja de avisos es un *popover* y se muestra encima. El aviso de «sesión terminada» también se ve con un diálogo abierto.
+
+**Administración › Notificaciones.**
+- **Servidor detectado:** PHP-FPM, LiteSpeed o Apache.
+- **Qué funciona sin acceso al servidor y qué no.**
+- **Pasos para un servicio externo gratuito** (cron-job.org) con la dirección secreta `/cron/run`. Reemplaza las instrucciones de HestiaCP, que quedan como opción para paneles con «Tareas Cron».
+
+## 1.15.1 (24/11/2026)
+
+Se entrega junto con la 1.15.0, en el mismo PR. No tiene migraciones nuevas.
+
+**Avisos sin cron y con Borealis cerrado: motor interno.** Sin una tarea programada en el servidor, los recordatorios solo se creaban mientras alguien tenía Borealis abierto. Ahora Borealis mantiene su propio motor (`app/Services/Heartbeat.php`):
+- **Arranque:** arranca con cualquier visita, incluso anónima.
+- **Funcionamiento:** cada 60 s se llama a sí mismo en `POST /cron/tick`, protegido con la clave de `/cron/run`, y ejecuta la tarea programada. Funciona sin sesión iniciada y sin pestañas abiertas.
+- **Seguridad:** hay una sola cadena de latidos a la vez, y el motor se detiene solo cuando hay un cron real.
+- **Estado:** visible en Administración › Notificaciones.
+- **Prueba real:** con Nginx + PHP-FPM (`tests/fpm/engine.sh`). Requisitos y límites en `docs/CONFIGURACION-1.15.md`.
+
+**Perfil (rediseño).**
+- **Cabecera:** foto, nombre, cargo, rol, correo, mención y horas semanales.
+- **Índice de secciones:** a la izquierda en escritorio y fijo arriba en el móvil. Sigue el desplazamiento y lleva a Datos personales, Apariencia, Notificaciones, Conexiones, Seguridad y Ayuda.
+- **Una sola columna** de ancho cómodo.
+- **Datos personales:** formulario en dos columnas y colores de iniciales como muestras.
+- **Apariencia:** incluye ahora las animaciones, que antes estaban en una tarjeta suelta, «Preferencias».
+- **Notificaciones:** las categorías se ven en cuadrícula, cada una marcada al estar activa.
+- **Menú de la cuenta:** arriba a la derecha ya no repite «Apariencia», porque llevaba a la misma página que «Mi perfil».
+
+**Ficha de la tarea (rediseño).**
+- **Panel lateral:** más ancho en pantallas grandes (hasta 1080 px) y título más grande.
+- **Secciones:** subtareas, relaciones, archivos y enlaces quedan en un solo bloque con separadores. El área de archivos ocupa una línea y los dos enlaces de trabajo van lado a lado.
+- **Descripción vacía:** se ve como una caja discreta, no como un hueco grande.
+- **Actividad en pestañas:** Comentarios, Horas (con las estimaciones), Seguimiento e Historial. Un punto rojo avisa cuando el seguimiento necesita atención o hay una estimación por revisar. La pestaña elegida se mantiene al guardar y al abrir otra tarea.
+- **Propiedades:** la fecha y la hora de entrega quedan en la misma línea, y «Sugerencia según el historial» se alinea con los valores.
+
+## 1.15.0 (24/11/2026)
+
+**Refinamiento funcional, auditoría social y experiencia de uso.** El detalle, la investigación de Atlassian y la evaluación heurística están en `docs/INFORME-1.15.md`. La configuración está en `docs/CONFIGURACION-1.15.md`: no hace falta nada nuevo, solo la migración 017.
+
+**Notificaciones con confirmaciones de salida (causa real).** Se sumaban cinco causas:
+- la campana solo cambiaba al cargar una página;
+- `window.confirm()` congelaba la página;
+- el service worker navegaba la ventana aunque tuviera cambios sin guardar;
+- sin cron, quien se quedaba en un formulario no disparaba el respaldo por visitas;
+- una sesión vencida llevaba al inicio de sesión y se perdía lo escrito.
+
+Cambios:
+- **Campana en vivo:** `notify-live.js` consulta `/api/notifications/status` cada minuto, al volver a la pestaña, al recuperar la red y al llegar un push.
+- **Confirmaciones:** todas usan el diálogo propio, que no bloquea la página.
+- **Avisos del sistema:** el service worker pregunta a la página antes de seguir un aviso; si hay cambios sin guardar, abre otra pestaña.
+- **Sesión:** la consulta en segundo plano no alarga la sesión. Si la sesión termina, aparece un aviso y el formulario se queda.
+- **Protección contra la pérdida de cambios:** se mantiene, con el diálogo propio, y `beforeunload` sigue solo para cerrar la pestaña.
+
+**Registro maestro.** `/admin/audit` reúne todo:
+- **Lo nuevo que registra:** inicio y cierre de sesión e intentos rechazados (con la red abreviada); errores del servidor sin traza; avisos que no se pudieron entregar; resumen diario de avisos; fallos de la tarea programada; automatizaciones y decisiones.
+- **Resultado:** columna nueva (hecho, error, rechazado) que entra en la huella solo cuando existe, así que las cadenas de la 1.14 siguen válidas.
+- **Consulta:** línea de tiempo por día, semana o mes; colores por tipo (trabajo, administración, automático, errores); filtros por tipo, resultado y tarea; enlace al elemento; páginas por n.º.
+- **Exportación:** JSON con las huellas, y CSV con columnas nuevas.
+- **Conservación opcional:** `bin/audit-archive.php` archiva sin romper la comprobación de integridad.
+
+**Barra lateral.**
+- Cuatro áreas plegables según el rol: Mi espacio, Organización, Seguimiento y Administración.
+- Modo compacto, favoritos (estrella en proyectos y tareas) y barra inferior en el móvil.
+- La búsqueda muestra favoritos y lo abierto hace poco. Las preferencias se guardan en el perfil.
+
+**Tareas.**
+- **Pestaña Equipo:** tabla, lista compacta o tablero. Se agrupa por proyecto, responsable, estado o fecha, y se filtra por responsable, fecha, prioridad, bloqueo y texto.
+- **Vistas guardadas:** personales o compartidas. La vista elegida se recuerda. Las páginas son de 100.
+- **Detalle:** cabecera con Seguir y Favorito; propiedades con horas reales y progreso; contenido en el orden descripción, subtareas, dependencias, archivos, comentarios, horas e historial.
+
+**Colaboración.**
+- **Seguir una tarea:** llegan sus comentarios y cambios de estado, sin duplicar los avisos de responsables. Por defecto no llegan al móvil.
+- **Decisiones:** un comentario se marca como decisión; queda en el registro y en el resumen del proyecto.
+
+**Automatizaciones** (Administración › Automatizaciones). Siete plantillas:
+- tarea vencida;
+- bloqueo resuelto;
+- superó las horas acordadas;
+- proyecto terminado;
+- prioridades de la semana;
+- informe al cerrar el sprint;
+- bloqueo prolongado.
+
+Solo envían avisos: no hay bucles. Cada acción tiene una clave única, así que nunca se repite. Hay un tope por ejecución, permisos de administración y registro de cada ejecución.
+
+**Monitoreo.** Quien trabaja ve una nota que dice quién más puede ver sus datos de carga. Borealis no mide tiempo en pantalla.
+
+**Migración `017_v115`:** solo agrega columnas e índices (`activity.result`, `audit_chain.base_id` y `base_hash`, `comments.is_decision`) y seis tablas (`user_favorites`, `user_recent`, `saved_views`, `task_watchers`, `automation_rules`, `automation_runs`).
+
 ## 1.14.0 (24/11/2026)
 
 **Gestión, monitoreo y trazabilidad.** El detalle de lo que se hizo, lo que no y por qué está en `docs/INFORME-1.14.md`. La configuración de la tarea programada está en `docs/CONFIGURACION-1.14.md`.

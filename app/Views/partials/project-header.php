@@ -30,6 +30,7 @@ $stateClass = ['planned' => '', 'active' => 'success', 'on_hold' => 'warn', 'com
       <div class="row wrap" style="margin-bottom:6px">
         <span class="badge key-badge"><?= e($project['project_key']) ?></span>
         <span class="badge <?= $stateClass ?>"><?= e(Projects::STATES[$project['state']]) ?></span>
+        <?php $pfav = \Borealis\Services\Navigation::isFavorite('project', $pid); ?><button class="btn btn--ghost btn--icon btn--sm fav-btn" type="button" data-favorite="project:<?= $pid ?>" aria-pressed="<?= $pfav ? 'true' : 'false' ?>" aria-label="Favorito" title="<?= $pfav ? 'Quitar de favoritos' : 'Agregar a favoritos' ?>"><?= icon('star', 'sm') ?></button>
       </div>
       <h1 data-project-name="<?= $pid ?>"><?= e($project['name']) ?></h1>
       <div class="meta">

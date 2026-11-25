@@ -1,7 +1,7 @@
 // Declarative behaviours: data-api forms, data-call buttons, data-patch inline edits,
 // menus, dialogs, toggles, selection and bulk actions.
-import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.14.0';
-import { openTask, closeDrawer } from './drawer.js?v=1.14.0';
+import { api, ApiError, appUrl, toast, refresh, afterSuccess, saveState, fillShare, openDialog, closeDialog, confirmAction, markDirty, clearDirty, onInit } from './core.js?v=1.16.2';
+import { openTask, closeDrawer } from './drawer.js?v=1.16.2';
 
 // ---------- Form serialisation ----------
 function serialize(form) {
@@ -433,7 +433,14 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-bulk-delete]')) { bulk('delete', null); return; }
 
   const leave = t.closest('[data-confirm-leave]');
-  if (leave && document.querySelector('form[data-dirty]') && !window.confirm('Tienes cambios sin guardar. ¿Salir sin guardar?')) { e.preventDefault(); }
+  if (leave && document.querySelector('form[data-dirty]') && leave.href) {
+    e.preventDefault();
+    confirmAction('Tienes cambios sin guardar. ¿Salir sin guardar?', { label: 'Salir sin guardar' }).then((yes) => {
+      if (!yes) return;
+      document.querySelectorAll('form[data-dirty]').forEach((f) => f.removeAttribute('data-dirty'));
+      location.href = leave.href;
+    });
+  }
 });
 
 document.addEventListener('change', (e) => {

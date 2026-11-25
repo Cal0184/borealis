@@ -1,7 +1,7 @@
 // Borealis core: server communication, feedback and region refresh.
 // Every change goes to the server first; the UI only reports success when the server confirms it.
 
-const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? '';
+export const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content ?? '';
 export const basePath = meta('base-path');
 const pretty = meta('pretty-urls') !== '0';
 
@@ -88,11 +88,36 @@ export function toast(message, { type = 'success', link = null, timeout = 3800 }
   close.type = 'button';
   close.setAttribute('aria-label', 'Cerrar aviso');
   close.textContent = '×';
-  close.onclick = () => el.remove();
+  const gone = () => { el.remove(); if (!box.children.length) try { box.hidePopover?.(); } catch { /* not shown */ } };
+  close.onclick = gone;
   el.appendChild(close);
   box.appendChild(el);
-  setTimeout(() => el.remove(), type === 'error' ? Math.max(timeout, 7000) : timeout);
+  raiseToasts(box);
+  setTimeout(gone, type === 'error' ? Math.max(timeout, 7000) : timeout);
 }
+
+// 1.16 · notices must be visible above an open dialog (confirmations, forms). A modal <dialog> sits in
+// the browser's «top layer», above any z-index, and makes the rest of the page inert, so before 1.16
+// a notice that arrived while a confirmation was open stayed hidden behind it. Now the toast box
+// moves into the open modal dialog (so its links stay usable) and is shown as a popover, which puts
+// it on top of the top layer. When the dialog closes, the box goes back to the page.
+function raiseToasts(box) {
+  const modals = [...document.querySelectorAll('dialog[open]')].filter((d) => { try { return d.matches(':modal'); } catch { return false; } });
+  const host = modals[modals.length - 1] || document.body;
+  if (box.parentElement !== host) host.appendChild(box);
+  if (typeof box.showPopover !== 'function') return;
+  try {
+    if (box.matches(':popover-open')) box.hidePopover();
+    box.showPopover();
+  } catch { /* not supported */ }
+}
+document.addEventListener('close', (e) => {
+  const box = document.getElementById('toasts');
+  if (!box || e.target?.tagName !== 'DIALOG' || !e.target.contains(box)) return;
+  document.body.appendChild(box);
+  if (box.children.length) raiseToasts(box);
+}, true);
+export { raiseToasts };
 
 // ---------- Motion preference ----------
 export function motionAllowed() {
@@ -133,9 +158,14 @@ export function openDialog(dlg) {
   first?.focus();
 }
 
+// 1.15: unsaved changes are confirmed inside Borealis (#dlg-confirm), never with window.confirm():
+// a native dialog freezes the page (no live notices, no timers) until it is answered.
 export function closeDialog(dlg, force = false) {
   if (!dlg?.open) return true;
-  if (!force && isDirty(dlg) && !window.confirm('Tienes cambios sin guardar. ¿Cerrar de todos modos?')) return false;
+  if (!force && isDirty(dlg)) {
+    confirmAction('Tienes cambios sin guardar. ¿Cerrar de todos modos?', { label: 'Cerrar sin guardar' }).then((yes) => { if (yes) closeDialog(dlg, true); });
+    return false;
+  }
   dlg.querySelectorAll('form').forEach(clearDirty);
   dlg.close();
   return true;
@@ -144,7 +174,7 @@ export function closeDialog(dlg, force = false) {
 /** Promise-based confirmation for destructive actions. */
 export function confirmAction(text, { label = 'Confirmar', style = 'danger' } = {}) {
   const dlg = document.getElementById('dlg-confirm');
-  if (!dlg) return Promise.resolve(window.confirm(text));
+  if (!dlg) return Promise.resolve(false); // every page has #dlg-confirm; never fall back to a blocking dialog
   return new Promise((resolve) => {
     dlg.querySelector('[data-confirm-text]').textContent = text;
     const ok = dlg.querySelector('[data-confirm-ok]');

@@ -33,6 +33,10 @@ final class ProjectController
         return View::page('projects/summary', $ctx + [
             'tab' => 'summary',
             'activity' => Activity::recent(10, $pid),
+            // 1.15: decisions recorded in the project's tasks (newest first)
+            'decisions' => Activity::v115() ? \Borealis\Core\Database::get()->all("SELECT c.body, c.created_at, u.name AS user_name, CONCAT(p.project_key, '-', t.number) AS task_key FROM comments c
+                JOIN tasks t ON t.id = c.task_id AND t.deleted_at IS NULL JOIN projects p ON p.id = t.project_id LEFT JOIN users u ON u.id = c.user_id
+                WHERE t.project_id = ? AND c.is_decision = 1 AND c.deleted_at IS NULL ORDER BY c.id DESC LIMIT 8", [$pid]) : [],
             'upcoming' => Tasks::query(['project_id' => $pid, 'category' => ['todo', 'in_progress'], 'has_date' => 1, 'sort' => 'due', 'limit' => 6]),
             'blocked' => Tasks::query(['project_id' => $pid, 'blocked' => 1, 'category' => ['todo', 'in_progress'], 'limit' => 6]),
             'activeSprint' => $ctx['modules']['sprints'] ? Sprints::active($pid) : null,

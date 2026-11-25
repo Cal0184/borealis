@@ -1,7 +1,7 @@
 // Friendlier colour picker: a swatch that opens a curated palette (plus "custom").
 // Enhances every input.color-input; the real input keeps the value, so forms and
 // inline saves work exactly as before.
-import { onInit } from './core.js?v=1.14.0';
+import { onInit } from './core.js?v=1.16.2';
 
 const PALETTE = [
   ['#10B981', 'Aurora'], ['#059669', 'Bosque'], ['#14B8A6', 'Laguna'], ['#0EA5E9', 'Cielo'],

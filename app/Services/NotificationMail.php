@@ -19,12 +19,28 @@ use Borealis\Core\Database;
  */
 final class NotificationMail
 {
+    private static bool $hooked = false;
+
+    /**
+     * 1.16.2 · e-mails go out right after the request that created the notice (an assignment, a
+     * change), not only when the scheduled job runs; the job still sends what is left.
+     */
+    public static function later(int $userId): void
+    {
+        if (self::$hooked || PHP_SAPI === 'cli' || !Mailer::configured()) return;
+        self::$hooked = true;
+        register_shutdown_function(function () {
+            \Borealis\Core\Background::detach();
+            try { self::flush(); } catch (\Throwable $e) { error_log('[Borealis] correo: ' . $e->getMessage()); }
+        });
+    }
+
     public static function flush(?int $userId = null): array
     {
         $out = ['emails' => 0, 'notices' => 0, 'errors' => 0];
         if (!Mailer::configured()) return $out;
         $db = Database::get();
-        $delay = max(0, (int)config('mail.delay_minutes', 2));
+        $delay = max(0, (int)MailSettings::get('delay_minutes', 0)); // 1.16.2: 0 = at once (before: 2 minutes)
         $sql = 'SELECT n.* FROM notifications n JOIN users u ON u.id = n.user_id AND u.is_active = 1
             WHERE n.emailed_at IS NULL AND n.read_at IS NULL AND n.created_at >= ? AND n.created_at <= ?' . ($userId ? ' AND n.user_id = ?' : '') . ' ORDER BY n.user_id, n.id LIMIT 1000';
         $params = [gmdate('Y-m-d H:i:s', time() - 2 * 86400), gmdate('Y-m-d H:i:s', time() - $delay * 60)];

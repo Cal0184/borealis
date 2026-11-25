@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Borealis\Services;
 
 use Borealis\Core\Auth;
+use Borealis\Core\Background;
 use Borealis\Core\Database;
 use Borealis\Security\Policy;
 use Borealis\Security\Secrets;
@@ -124,6 +125,10 @@ final class Scheduler
                 $out['emails'] = $mail['emails']; $out['mail_notices'] = $mail['notices']; $out['mail_errors'] = $mail['errors'];
             } catch (\Throwable $e) { $errors[] = 'Correo: ' . $e->getMessage(); }
             try { $out['gcal'] = GoogleExport::runAll(); } catch (\Throwable $e) { $errors[] = 'Google Calendar: ' . $e->getMessage(); }
+            if (class_exists(Automations::class)) {
+                try { $out['automations'] = Automations::runScheduled(); } catch (\Throwable $e) { $errors[] = 'Automatizaciones: ' . $e->getMessage(); }
+            }
+            try { self::dailyDigest(); } catch (\Throwable $e) { $errors[] = 'Registro maestro: ' . $e->getMessage(); }
         } catch (\Throwable $e) {
             $errors[] = $e->getMessage();
         } finally {
@@ -136,10 +141,49 @@ final class Scheduler
                 $db->run('UPDATE system_jobs SET last_finished_at = ?, last_ok_at = IF(? = 1, ?, last_ok_at), last_summary = ?, last_error = ?, cli_ok_at = IF(? = 1 AND ? = \'cli\', ?, cli_ok_at) WHERE name = ?', [
                     now(), $errors ? 0 : 1, now(), mb_substr($out['summary'], 0, 255), $errors ? mb_substr(implode(' · ', $errors), 0, 500) : null, $errors ? 0 : 1, $source, now(), self::JOB]);
             }
+            try { self::logRunErrors($errors, $source); } catch (\Throwable) {}
             flock($lock, LOCK_UN);
             fclose($lock);
         }
         return $out;
+    }
+
+    /**
+     * 1.15 · once a day, one Master Log entry per workspace with the previous day's notices: created,
+     * delivered to devices and failed. (Each failed delivery also has its own entry, with the reason.)
+     * A run that fails writes one entry an hour at most, so a broken setting is visible but not noisy.
+     */
+    private static function dailyDigest(): void
+    {
+        if (!Activity::v115()) return;
+        $db = Database::get();
+        $day = date('Y-m-d', strtotime(today() . ' -1 day'));
+        [$from, $to] = [$day . ' 00:00:00', $day . ' 23:59:59'];
+        foreach ($db->column("SELECT DISTINCT workspace_id FROM workspace_members WHERE status = 'active'") as $ws) {
+            $ws = (int)$ws;
+            $key = 'Avisos del ' . date('d/m/Y', strtotime($day));
+            if ($db->value("SELECT 1 FROM activity WHERE workspace_id = ? AND action = 'notify_daily' AND summary LIKE ? LIMIT 1", [$ws, $key . '%'])) continue;
+            $created = (int)$db->value('SELECT COUNT(*) FROM notifications WHERE workspace_id = ? AND created_at BETWEEN ? AND ?', [$ws, $from, $to]);
+            $d = $db->one("SELECT SUM(d.state = 'sent') AS sent, SUM(d.state = 'failed') AS failed FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
+                WHERE n.workspace_id = ? AND d.created_at BETWEEN ? AND ?", [$ws, $from, $to]) ?: [];
+            $sent = (int)($d['sent'] ?? 0);
+            $failed = (int)($d['failed'] ?? 0);
+            Activity::log('notify_daily', 'notification', null, "$key: $created creados, $sent entregados a dispositivos" . ($failed ? ", $failed sin entregar" : ''), null, null, [], $ws,
+                ['category' => 'notification', 'source' => 'system', 'user_id' => null, 'after' => ['creados' => $created, 'entregados' => $sent, 'sin entregar' => $failed]]);
+        }
+    }
+
+    /** 1.15 · a failed run, in each workspace's Master Log (once an hour for the same message). */
+    private static function logRunErrors(array $errors, string $source): void
+    {
+        if (!$errors || !Activity::v115()) return;
+        $db = Database::get();
+        $msg = mb_substr('La tarea programada terminó con errores: ' . implode(' · ', $errors), 0, 255);
+        $since = date('Y-m-d H:i:s', time() - 3600);
+        foreach ($db->column("SELECT DISTINCT workspace_id FROM workspace_members WHERE status = 'active'") as $ws) {
+            if ($db->value("SELECT 1 FROM activity WHERE workspace_id = ? AND action = 'notify_run_error' AND created_at >= ? LIMIT 1", [$ws, $since])) continue;
+            Activity::log('notify_run_error', 'system', null, $msg, null, null, [], (int)$ws, ['category' => 'error', 'result' => 'error', 'source' => 'system', 'user_id' => null, 'after' => ['origen' => $source]]);
+        }
     }
 
     public static function summary(array $o): string
@@ -206,21 +250,41 @@ final class Scheduler
      */
     public static function maybeAfterResponse(): void
     {
+        // 1.15: keep the internal engine beating (cheap: reads one small file); it starts its chain
+        // after the answer was sent, so the page never waits for it.
+        if (Heartbeat::enabled()) {
+            $s = Heartbeat::state();
+            if (!Heartbeat::alive($s) && (int)$s['attempt'] <= time() - 60) register_shutdown_function(function () {
+                Background::detach();
+                Heartbeat::ensure();
+            });
+        }
+        self::afterResponse('visit');
+    }
+
+    /** Seconds between two runs started by requests (visits, pages left open, devices). */
+    public const REQUEST_EVERY = 120;
+
+    /**
+     * 1.16 · runs the job after the answer, when the last run is older than REQUEST_EVERY. Used by
+     * every page («visit») and by /cron/ping («device»: a service worker that received a notice or
+     * woke up by itself). PHP-FPM, LiteSpeed and Apache (Core/Background.php).
+     */
+    public static function afterResponse(string $source): void
+    {
         $mode = config('cron.web_fallback', true);
         if ($mode === false || self::$hooked) return;
-        if (!function_exists('fastcgi_finish_request') && $mode !== 'always') return;
+        if ($mode !== 'always' && !Heartbeat::serverCan()) return;
         try {
             if (!self::ready()) return;
             $last = Database::get()->value('SELECT last_started_at FROM system_jobs WHERE name = ?', [self::JOB]);
-            if ($last && strtotime($last . ' UTC') > time() - 300) return;
+            if ($last && strtotime($last . ' UTC') > time() - self::REQUEST_EVERY) return;
         } catch (\Throwable) { return; }
         self::$hooked = true;
-        register_shutdown_function(function () {
-            if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
-            if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
-            ignore_user_abort(true);
+        register_shutdown_function(function () use ($source) {
+            Background::detach();
             @set_time_limit(120);
-            try { self::run('visit'); } catch (\Throwable $e) { error_log('[Borealis] tarea programada: ' . $e->getMessage()); }
+            try { self::run($source); } catch (\Throwable $e) { error_log('[Borealis] tarea programada: ' . $e->getMessage()); }
         });
     }
 }

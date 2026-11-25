@@ -214,6 +214,69 @@ final class WorkspaceApi
         return Response::ok(['unread' => Notifications::unreadCount()], '');
     }
 
+    /**
+     * 1.15 · live notices for an open page (notify-live.js): unread count and anything newer than
+     * «after». Read-only and cheap; the page asks every minute while it is visible, at once when it
+     * becomes visible again or the connection returns, and when the service worker received a push.
+     */
+    public function notificationStatus(Request $r): Response
+    {
+        $after = max(0, (int)$r->q('after'));
+        $db = \Borealis\Core\Database::get();
+        $rows = $db->all('SELECT id, type, message, url, created_at FROM notifications WHERE user_id = ? AND workspace_id = ? AND read_at IS NULL AND id > ? ORDER BY id DESC LIMIT 5',
+            [\Borealis\Core\Auth::id(), Policy::wsId(), $after]);
+        $latest = (int)$db->value('SELECT COALESCE(MAX(id), 0) FROM notifications WHERE user_id = ? AND workspace_id = ?', [\Borealis\Core\Auth::id(), Policy::wsId()]);
+        $items = array_map(fn($n) => ['id' => (int)$n['id'], 'title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'],
+            'url' => url('/notifications/' . (int)$n['id'] . '/open')], $rows);
+        return Response::ok(['unread' => Notifications::unreadCount(), 'latest' => $latest, 'items' => $after ? $items : []], '');
+    }
+
+    /** 1.15 · star / unstar a project, task or team (sidebar «Favoritos»). */
+    public function favorite(Request $r): Response
+    {
+        $in = $r->input();
+        $on = \Borealis\Services\Navigation::toggleFavorite((string)($in['type'] ?? ''), (int)($in['id'] ?? 0));
+        return Response::ok(['favorite' => $on], $on ? 'Agregado a favoritos' : 'Quitado de favoritos');
+    }
+
+    /** 1.15 · automations (administration) */
+    public function createAutomation(Request $r): Response
+    {
+        $id = \Borealis\Services\Automations::create($r->input());
+        return Response::ok(['id' => $id], 'Automatización activada');
+    }
+
+    public function updateAutomation(Request $r): Response
+    {
+        \Borealis\Services\Automations::update($r->intParam('id'), $r->input());
+        return Response::ok([], 'Automatización guardada');
+    }
+
+    public function deleteAutomation(Request $r): Response
+    {
+        \Borealis\Services\Automations::delete($r->intParam('id'));
+        return Response::ok([], 'Automatización eliminada');
+    }
+
+    /** 1.15 · saved task filters */
+    public function saveView(Request $r): Response
+    {
+        $id = \Borealis\Services\SavedViews::create($r->input());
+        return Response::ok(['id' => $id], 'Vista guardada');
+    }
+
+    public function deleteView(Request $r): Response
+    {
+        \Borealis\Services\SavedViews::delete($r->intParam('id'));
+        return Response::ok([], 'Vista borrada');
+    }
+
+    /** 1.15 · favorites and recently opened items, for the quick search before typing. */
+    public function navRecent(Request $r): Response
+    {
+        return Response::ok(['favorites' => \Borealis\Services\Navigation::favorites(), 'recent' => \Borealis\Services\Navigation::recent(8)], '');
+    }
+
     public function readAll(Request $r): Response
     {
         Notifications::markAllRead();

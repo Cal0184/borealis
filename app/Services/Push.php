@@ -142,7 +142,7 @@ final class Push
         if (self::$hooked || PHP_SAPI === 'cli') return;
         self::$hooked = true;
         register_shutdown_function(function () {
-            if (function_exists('fastcgi_finish_request')) @fastcgi_finish_request();
+            \Borealis\Core\Background::detach(); // 1.16: PHP-FPM, LiteSpeed or Apache
             try { foreach (array_keys(self::$pending) as $uid) self::flush((int)$uid); } catch (\Throwable $e) { error_log('[Borealis] push: ' . $e->getMessage()); }
         });
     }
@@ -203,16 +203,30 @@ final class Push
         return in_array($n['type'], ['overdue', 'due', 'assigned'], true) ? 'high' : 'normal';
     }
 
+    /** 1.16.1 · notices important enough to stay on screen until the person closes them. */
+    public const STICKY_TYPES = ['assigned', 'due', 'overdue', 'monitor'];
+
     public static function payload(array $n): string
     {
         return json_encode(['title' => Notifications::TYPES[$n['type']] ?? 'Borealis', 'body' => $n['message'], 'url' => $n['url'] ?: url('/notifications'),
-            'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            'tag' => 'borealis-' . ($n['dedupe_key'] ? substr(md5($n['dedupe_key']), 0, 12) : $n['id']), 'id' => (int)$n['id']] + self::attention((int)($n['user_id'] ?? 0), (string)$n['type']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private static function groupPayload(int $count, array $last): string
     {
         return json_encode(['title' => 'Borealis', 'body' => $count . ' avisos nuevos: ' . mb_substr($last['message'], 0, 120) . '…', 'url' => url('/notifications'),
-            'tag' => 'borealis-grupo', 'id' => (int)$last['id']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            'tag' => 'borealis-grupo', 'id' => (int)$last['id']] + self::attention((int)($last['user_id'] ?? 0), 'assigned'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * 1.16.1 · how the device shows it: with sound (the system sound; browsers do not allow a sound of
+     * their own) unless the person turned sound off, and, for important notices, on screen until
+     * closed. The service worker reads these fields.
+     */
+    public static function attention(int $userId, string $type): array
+    {
+        $p = $userId ? Notifications::prefs($userId) : ['sound' => true, 'sticky' => true];
+        return ['silent' => !$p['sound'], 'sticky' => $p['sticky'] && in_array($type, self::STICKY_TYPES, true)];
     }
 
     /** One notice to one device, recorded once in notification_deliveries (when the 1.14 table exists). */
@@ -241,6 +255,14 @@ final class Push
         }
         Database::get()->run('UPDATE notification_deliveries SET state = ?, attempts = ?, last_code = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE notification_id = ? AND subscription_id = ?',
             [$state === 'ok' ? 'sent' : $state, $attempt, $l['code'] ?: null, $l['error'] ? mb_substr((string)$l['error'], 0, 255) : null, $next, now(), $notificationId, $subId]);
+        // 1.15: a message that will not be delivered goes to the Master Log, with the reason
+        if ($state === 'failed') {
+            try {
+                $n = Database::get()->one('SELECT n.workspace_id, n.user_id, n.project_id, n.task_id, u.name FROM notifications n JOIN users u ON u.id = n.user_id WHERE n.id = ?', [$notificationId]);
+                if ($n) Activity::log('notify_failed', 'notification', $notificationId, 'No se pudo entregar un aviso al dispositivo de ' . $n['name'], $n['project_id'] ? (int)$n['project_id'] : null, $n['task_id'] ? (int)$n['task_id'] : null, [], (int)$n['workspace_id'],
+                    ['category' => 'notification', 'result' => 'error', 'source' => 'system', 'user_id' => null, 'after' => ['código' => $l['code'] ?: null, 'motivo' => $l['error'] ? mb_substr((string)$l['error'], 0, 200) : null, 'intentos' => $attempt]]);
+            } catch (\Throwable $e) { \Borealis\Core\ErrorHandler::log($e); }
+        }
     }
 
     /**

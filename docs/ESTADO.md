@@ -1,4 +1,4 @@
-# Estado de funciones — Borealis 1.14.0
+# Estado de funciones — Borealis 1.16.0
 
 **Criterio:** una función aparece como *Implementado y probado* solo si una prueba automatizada la ejerció de verdad y pasó (ver [PRUEBAS.md](PRUEBAS.md)). Que su pantalla abra sin errores no cuenta como probarla. Lo que solo se revisó leyendo el código aparece como *pendiente de prueba*.
 
@@ -8,6 +8,44 @@
 | 🟡 Implementado, pendiente de prueba | Existe y su pantalla carga, pero ninguna prueba ejercita su comportamiento |
 | 🔧 En desarrollo | Parcial |
 | ⏳ Pendiente | No incluido todavía |
+
+## Novedades de 1.16
+
+| Función | Estado | Notas |
+|---|---|---|
+| Trabajo tras responder con PHP-FPM, LiteSpeed y Apache (`Core/Background.php`) | ✅ | Prueba real con Nginx + PHP-FPM y con Apache + mod_php (`tests/fpm/engine.sh`); LiteSpeed solo revisado en el código (`litespeed_finish_request`) |
+| Motor interno sin cron en Apache (modo compatible) | ✅ | `SERVER=apache tests/fpm/engine.sh` |
+| `/cron/ping`: un dispositivo reanuda el motor y la tarea, sin sesión, con límites de frecuencia | ✅ | Integración «1.16 · Avisos con Borealis cerrado…» y prueba real (paso 6) |
+| Service worker: ping al recibir o abrir un aviso y en la sincronización periódica | 🟡 | Código y registro comprobados; el disparo real lo decide el navegador con un push del sistema |
+| Todas las categorías al dispositivo por defecto; paso desde preferencias antiguas sin cambios | ✅ | Integración «1.16 · Preferencias activadas por defecto» |
+| Horario de silencio apagado por defecto | ✅ | Integración |
+| Sesión caducada: la asignación y el cambio de fecha llegan cifrados al dispositivo | ✅ | Integración «1.16 · La sesión caducada…» (servicio de notificaciones simulado) |
+| Sin envíos repetidos entre tarea, motor y dispositivos | ✅ | Integración y prueba real |
+| Avisos visibles encima de confirmaciones abiertas | ✅ | Navegador «Novedades 1.16» |
+| Invitación a activar en todas las páginas, «Ahora no» por 7 días | ✅ | Integración (presencia) · revisión de código (7 días) |
+| Notificaciones reales de Google, Apple o Mozilla en un teléfono | 🟡 | No se puede probar aquí |
+
+## Novedades de 1.15
+
+| Función | Estado | Notas |
+|---|---|---|
+| Campana en vivo con la página abierta (`/api/notifications/status`), sin alargar la sesión, sin navegar con sesión vencida | ✅ | Integración «1.15 · Avisos con la página abierta» y navegador |
+| Confirmaciones propias que no bloquean (sin `window.confirm`), protección de cambios conservada | ✅ | Navegador «1.15 · Confirmaciones…» |
+| El service worker no navega una ventana con cambios sin guardar | 🟡 | Código revisado; probarlo exige un push real del sistema operativo |
+| Notificaciones del sistema con el navegador cerrado | 🟡 | Depende del navegador y del sistema (INFORME-1.15 § 3); no se puede probar aquí |
+| Motor interno de avisos: recordatorios y avisos al teléfono sin cron, sin sesión y sin pestañas abiertas | ✅ | Prueba real con Nginx + PHP-FPM (`tests/fpm/engine.sh`, 12/12); la entrega final por Google, Apple o Mozilla no se puede probar aquí |
+| Perfil rediseñado (cabecera, índice de secciones, una columna) y menú de cuenta sin «Apariencia» duplicado | ✅ | Integración y navegador (las secciones y sus formularios siguen probándose); revisión visual con capturas 64, 65 y 69 |
+| Ficha de tarea rediseñada: panel más ancho, secciones compactas, actividad en pestañas que se recuerdan | ✅ | Navegador (horas, seguimiento y estimaciones se usan desde sus pestañas); capturas 66, 67 y 68 |
+| Registro maestro: accesos, intentos rechazados, resultado en la huella, tipos, agrupación, páginas por n.º, JSON y CSV | ✅ | Integración «1.15 · Registro maestro» y navegador |
+| Errores del servidor y avisos no entregados en el registro | 🟡 | El resumen diario y los fallos de entrega se escriben en la tarea programada; el error del servidor no se provoca en las pruebas |
+| Conservación con `bin/audit-archive.php` (la cadena sigue desde el último archivado) | ✅ | Integración: opciones, mínimo y continuación de la cadena; el archivado real de filas antiguas no se ejerce |
+| Barra lateral por áreas según el rol, grupos recordados, modo compacto, favoritos, recientes, barra inferior móvil | ✅ | Integración y navegador |
+| Tareas › Equipo: tabla, lista, tablero, agrupación, filtros, vista recordada, vistas guardadas | ✅ | Integración y navegador |
+| Detalle de tarea en tres zonas con horas reales y progreso | ✅ | Integración y navegador |
+| Seguir tareas (sin duplicar avisos) y decisiones | ✅ | Integración |
+| Automatizaciones: tarea vencida, bloqueo resuelto, horas superadas y bloqueo prolongado | ✅ | Integración (sin repetición, pausa, permisos, registro) |
+| Automatizaciones: proyecto terminado, prioridades de la semana, informe de sprint | 🟡 | Implementadas con la misma base; sin prueba propia de su condición |
+| Actualización 1.14 → 1.15 | ✅ | Integración (migración 017 vuelta a aplicar; integridad correcta) |
 
 ## Novedades de 1.14
 

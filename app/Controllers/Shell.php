@@ -49,6 +49,9 @@ final class Shell
             'show_reports' => true,
             'is_admin' => Policy::can('workspace.manage') || Policy::can('members.manage') || Policy::can('roles.manage'),
             'can_create_project' => Policy::can('projects.create'),
+            // 1.15 · role-based sidebar groups, favorites
+            'can' => ['members' => Policy::can('members.manage'), 'audit' => Policy::can('audit.view'), 'workspace' => Policy::can('workspace.manage')],
+            'favorites' => \Borealis\Services\Navigation::favorites(),
             'motion' => Auth::user()['prefs']['motion'] ?? 'full',
             'ambient' => Auth::user()['prefs']['ambient'] ?? 'default',
             'tour' => Auth::user()['prefs']['tour'] ?? null,

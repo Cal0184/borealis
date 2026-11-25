@@ -277,7 +277,8 @@ foreach (['admin' => $admin, 'gestión' => $gemaC, 'colaboración' => $betoC, 'a
     }
 }
 check('Las seis pestañas de Análisis cargan para administración, gestión, colaboración y alguien ajeno', $ok, implode(', ', $bad));
-check('El menú principal tiene «Análisis» junto a Monitoreo', str_contains($admin->body, '> Análisis</a>') && str_contains($admin->body, 'Monitoreo</a>'));
+// 1.15: both live in the «Seguimiento» group, as «Carga y alertas» and «Análisis e informes»
+check('El menú principal tiene «Análisis» junto a Monitoreo', str_contains($admin->body, '>Análisis e informes</span>') && str_contains($admin->body, '>Carga y alertas</span>') && str_contains($admin->body, 'data-nav-group="watch"'));
 $gemaC->get("/analysis?tab=report&project_id=$pe");
 check('Informes: resumen, cumplimiento, evolución, carga, desviaciones, bloqueos, riesgos, recomendaciones y decisiones pendientes', $gemaC->status === 200 && str_contains($gemaC->body, '1. Resumen general') && str_contains($gemaC->body, '9. Decisiones pendientes') && str_contains($gemaC->body, 'Esperando al proveedor'), snippet($gemaC));
 $gemaC->get("/analysis/report/print?project_id=$pe");

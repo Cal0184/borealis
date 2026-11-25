@@ -1,6 +1,6 @@
 // Calendar: drag a task to another day to reschedule it (start date shifts with it).
 // 1.6: events of the general calendar move the same way (time and length are kept).
-import { api, toast, refresh } from './core.js?v=1.14.0';
+import { api, toast, refresh } from './core.js?v=1.16.2';
 
 const parse = (s) => (s ? Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) : null);
 const fmt = (ms) => new Date(ms).toISOString().slice(0, 10);

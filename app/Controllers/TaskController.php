@@ -55,6 +55,7 @@ final class TaskController
             return Response::redirect(url('/t/' . $t['task_key'], $r->q('drawer') === '1' ? ['drawer' => 1] : []));
         }
         $data = self::detail($t);
+        \Borealis\Services\Navigation::touch('task', (int)$t['id']);
         if ($r->q('drawer') === '1') {
             return Response::html(View::render('partials/task-detail', $data + ['inDrawer' => true]));
         }

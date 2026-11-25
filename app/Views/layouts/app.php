@@ -4,12 +4,13 @@ $s = Shell::data();
 $nav = $nav ?? '';
 $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
 ?><!doctype html>
-<html lang="es" data-motion="<?= e($s['motion']) ?>" data-ambient="<?= e($s['ambient']) ?>"<?= $s['tour'] === null ? ' data-tour-auto' . ($s['tour_step'] !== null ? ' data-tour-step="' . (int)$s['tour_step'] . '"' : '') : '' ?><?= $s['tour_project'] ? ' data-tour-project="' . (int)$s['tour_project'] . '"' : '' ?>>
+<html lang="es" data-motion="<?= e($s['motion']) ?>"<?= !empty($s['user']['prefs']['nav_compact']) ? ' data-nav="compact"' : '' ?> data-ambient="<?= e($s['ambient']) ?>"<?= $s['tour'] === null ? ' data-tour-auto' . ($s['tour_step'] !== null ? ' data-tour-step="' . (int)$s['tour_step'] . '"' : '') : '' ?><?= $s['tour_project'] ? ' data-tour-project="' . (int)$s['tour_project'] . '"' : '' ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <meta name="base-path" content="<?= e(rtrim((string)config('app.base_path', ''), '/')) ?>">
+<meta name="borealis-sound" content="<?= !empty($s['user']['id']) && \Borealis\Services\Notifications::prefs((int)$s['user']['id'])['sound'] ? '1' : '0' ?>">
 <meta name="pretty-urls" content="<?= config('app.pretty_urls', true) ? '1' : '0' ?>">
 <title><?= e(($title ?? 'Borealis') . ' · ' . $s['workspace']['name']) ?></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23142820'/%3E%3Cpath d='M12 4 7 11h2.5L6 16h4.5v4h3v-4H18l-3.5-5H17z' fill='%2310B981'/%3E%3C/svg%3E">
@@ -38,20 +39,62 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
         <div class="ws-name truncate" title="Espacio de trabajo"><?= e($s['workspace']['name']) ?></div>
       <?php endif; ?>
     </div>
-    <nav class="nav" id="main-nav" data-region>
-      <a class="nav-item" href="<?= e(url('/')) ?>"<?= $nav === 'home' ? ' aria-current="page"' : '' ?>><?= icon('home') ?> Inicio</a>
-      <a class="nav-item" data-tour="my-work" href="<?= e(url('/my-work')) ?>"<?= $nav === 'my-work' ? ' aria-current="page"' : '' ?>><?= icon('check-square') ?> Mi trabajo<?php if ($s['my_overdue']): ?><span class="count danger" title="<?= (int)$s['my_overdue'] ?> vencidas"><?= (int)$s['my_overdue'] ?></span><?php endif; ?><?php if ($s['my_open']): ?><span class="count<?= $s['my_overdue'] ? ' soft' : '' ?>" title="<?= (int)$s['my_open'] ?> abiertas"><?= (int)$s['my_open'] ?></span><?php endif; ?></a>
-      <a class="nav-item" href="<?= e(url('/teams')) ?>"<?= $nav === 'teams' ? ' aria-current="page"' : '' ?>><?= icon('users') ?> Equipos</a>
-      <a class="nav-item" data-tour="projects" href="<?= e(url('/projects')) ?>"<?= $nav === 'projects' && !$currentProjectId ? ' aria-current="page"' : '' ?>><?= icon('folder') ?> Proyectos</a>
-      <a class="nav-item" data-tour="nav-tasks" href="<?= e(url('/tasks')) ?>"<?= $nav === 'tasks' ? ' aria-current="page"' : '' ?>><?= icon('list') ?> Tareas</a>
-      <a class="nav-item" href="<?= e(url('/quick')) ?>"<?= $nav === 'quick' ? ' aria-current="page"' : '' ?>><?= icon('pin') ?> Trabajos rápidos</a>
-      <?php if ($s['show_sprints']): ?><a class="nav-item" data-tour="nav-sprints" href="<?= e(url('/sprints')) ?>"<?= $nav === 'sprints' ? ' aria-current="page"' : '' ?>><?= icon('zap') ?> Sprints</a><?php endif; ?>
-      <a class="nav-item" data-tour="nav-calendar" href="<?= e(url('/calendar')) ?>"<?= $nav === 'calendar' ? ' aria-current="page"' : '' ?>><?= icon('calendar') ?> Calendario</a>
-      <a class="nav-item" data-tour="nav-tools" href="<?= e(url('/integrations')) ?>"<?= $nav === 'integrations' ? ' aria-current="page"' : '' ?>><?= icon('link') ?> Todo a mano</a>
-      <a class="nav-item" href="<?= e(url('/monitoring')) ?>"<?= in_array($nav, ['monitoring', 'reports'], true) ? ' aria-current="page"' : '' ?>><?= icon('chart') ?> Monitoreo</a>
-      <a class="nav-item" data-tour="nav-analysis" href="<?= e(url('/analysis')) ?>"<?= $nav === 'analysis' ? ' aria-current="page"' : '' ?>><?= icon('timeline') ?> Análisis</a>
-      <a class="nav-item" href="<?= e(url('/notifications')) ?>"<?= $nav === 'notifications' ? ' aria-current="page"' : '' ?>><?= icon('bell') ?> Notificaciones<?php if ($s['unread']): ?><span class="count"><?= (int)$s['unread'] ?></span><?php endif; ?></a>
+    <?php
+    // 1.15 · the sidebar is grouped by area. A group can be folded (remembered per person); the group of
+    // the current page always stays open. Groups and items only appear when the person can use them.
+    $section = $section ?? '';
+    $closed = (array)($s['user']['prefs']['nav_closed'] ?? []);
+    $cur = fn(bool $on) => $on ? ' aria-current="page"' : '';
+    $groups = [
+        'mine' => ['Mi espacio', [
+            ['/', 'home', 'Inicio', $nav === 'home', ''],
+            ['/my-work', 'check-square', 'Mi trabajo', $nav === 'my-work', 'my-work', 'mine'],
+            ['/calendar', 'calendar', 'Mi calendario', $nav === 'calendar', 'nav-calendar'],
+            ['/notifications', 'inbox', 'Bandeja de entrada', $nav === 'notifications', '', 'unread'],
+            ['/integrations', 'link', 'Todo a mano', $nav === 'integrations', 'nav-tools'],
+        ]],
+        'org' => ['Organización', array_values(array_filter([
+            ['/projects', 'folder', 'Proyectos', $nav === 'projects' && !$currentProjectId, 'projects'],
+            ['/tasks', 'list', 'Todas las tareas', $nav === 'tasks', 'nav-tasks'],
+            ['/quick', 'pin', 'Trabajos rápidos', $nav === 'quick', ''],
+            ['/teams', 'users', 'Equipos', $nav === 'teams', ''],
+            $s['show_sprints'] ? ['/sprints', 'zap', 'Planificación', $nav === 'sprints', 'nav-sprints'] : null,
+        ]))],
+        'watch' => ['Seguimiento', [
+            ['/monitoring', 'chart', 'Carga y alertas', in_array($nav, ['monitoring', 'reports'], true), ''],
+            ['/analysis', 'timeline', 'Análisis e informes', $nav === 'analysis', 'nav-analysis'],
+        ]],
+        'admin' => ['Administración', array_values(array_filter([
+            $s['can']['members'] ? ['/admin/members', 'users', 'Usuarios', $nav === 'admin' && $section === 'members', ''] : null,
+            $s['can']['audit'] ? ['/admin/audit', 'clock', 'Registro maestro', $nav === 'admin' && $section === 'audit', ''] : null,
+            $s['can']['workspace'] ? ['/admin/automations', 'zap', 'Automatizaciones', $nav === 'admin' && $section === 'automations', ''] : null,
+            $s['can']['workspace'] ? ['/admin/notifications', 'bell', 'Notificaciones y tareas', $nav === 'admin' && $section === 'notifications', ''] : null,
+            $s['is_admin'] ? ['/admin', 'settings', 'Configuración', $nav === 'admin' && !in_array($section, ['members', 'audit', 'automations', 'notifications'], true), 'nav-admin'] : null,
+        ]))],
+    ];
+    ?>
+    <nav class="nav nav-groups" id="main-nav" data-region aria-label="Secciones">
+      <?php foreach ($groups as $gk => [$glabel, $items]): if (!$items) continue;
+        $active = (bool)array_filter($items, fn($i) => $i[3]); ?>
+        <details class="nav-group" data-nav-group="<?= $gk ?>"<?= $active || !in_array($gk, $closed, true) ? ' open' : '' ?>>
+          <summary class="nav-group-head"><span><?= e($glabel) ?></span><?= icon('chevron-down', 'sm') ?></summary>
+          <?php foreach ($items as $it): [$href, $ic, $label, $on, $tour] = $it; $badge = $it[5] ?? null; ?>
+            <a class="nav-item" href="<?= e(url($href)) ?>"<?= $tour ? ' data-tour="' . e($tour) . '"' : '' ?><?= $cur($on) ?> title="<?= e($label) ?>"><?= icon($ic) ?> <span class="nav-text"><?= e($label) ?></span>
+              <?php if ($badge === 'mine'): ?><?php if ($s['my_overdue']): ?><span class="count danger" title="<?= (int)$s['my_overdue'] ?> vencidas"><?= (int)$s['my_overdue'] ?></span><?php endif; ?><?php if ($s['my_open']): ?><span class="count<?= $s['my_overdue'] ? ' soft' : '' ?>" title="<?= (int)$s['my_open'] ?> abiertas"><?= (int)$s['my_open'] ?></span><?php endif; ?><?php endif; ?>
+              <?php if ($badge === 'unread'): ?><span class="count" data-nav-unread<?= $s['unread'] ? '' : ' hidden' ?>><?= $s['unread'] ? (int)$s['unread'] : '' ?></span><?php endif; ?>
+            </a>
+          <?php endforeach; ?>
+        </details>
+      <?php endforeach; ?>
     </nav>
+    <?php if ($s['favorites']): ?>
+      <div class="nav-label"><span>Favoritos</span></div>
+      <nav class="nav" id="sidebar-favorites" aria-label="Favoritos">
+        <?php foreach ($s['favorites'] as $f): ?>
+          <a class="nav-project" href="<?= e($f['url']) ?>" title="<?= e($f['label']) ?>" data-fav="<?= e($f['type'] . ':' . $f['id']) ?>"><span class="dot" style="--dot:<?= e($f['color'] ?: '#10B981') ?>"></span><span class="name"><?= e($f['type'] === 'task' ? $f['sub'] . ' · ' . $f['label'] : $f['label']) ?></span></a>
+        <?php endforeach; ?>
+      </nav>
+    <?php endif; ?>
     <?php $wk = $s['week_minutes']; $wh = $s['weekly_hours']; $wp = $wh ? min(100, (int)round($wk / ($wh * 60) * 100)) : 0; ?>
     <a class="week-card" id="sidebar-week" data-tour="hours" data-region href="<?= e(url('/my-work')) ?>" aria-label="Tu semana: <?= e(\Borealis\Services\TimeEntries::fmt($wk)) ?> registradas<?= $wh ? ' de ' . e(rtrim(rtrim(number_format($wh, 1, '.', ''), '0'), '.')) . ' h' : '' ?>">
       <span class="week-head"><?= icon('clock', 'sm') ?> Tu semana</span>
@@ -77,9 +120,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
     <?php endif; ?>
     <div class="sidebar-foot">
       <div class="sidebar-forest" aria-hidden="true"></div>
-      <?php if ($s['is_admin']): ?>
-        <nav class="nav"><a class="nav-item" href="<?= e(url('/admin')) ?>"<?= $nav === 'admin' ? ' aria-current="page"' : '' ?>><?= icon('settings') ?> Administración</a></nav>
-      <?php endif; ?>
+      <button class="nav-collapse" type="button" data-nav-compact aria-pressed="<?= !empty($s['user']['prefs']['nav_compact']) ? 'true' : 'false' ?>" title="Barra lateral compacta"><?= icon('chevron-left', 'sm') ?> <span class="nav-text">Compactar barra</span></button>
       <a class="me-card" href="<?= e(url('/profile')) ?>"><span id="sidebar-me-photo" data-region><?= avatar($s['user'], 'sm') ?></span><span><strong class="truncate"><?= e($s['user']['name']) ?></strong><span class="truncate"><?= e($s['workspace']['role_name'] ?? 'Mi perfil') ?></span></span></a>
     </div>
   </aside>
@@ -101,7 +142,7 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
         <button class="btn btn--aurora" type="button" data-dialog="dlg-new-task" data-tour="new-task"><?= icon('plus') ?><span class="hide-sm">Nueva tarea</span></button>
         <div class="menu-wrap">
           <button class="btn btn--ghost btn--icon" type="button" data-menu data-menu-src="<?= e(url('/notifications/menu')) ?>" aria-label="Notificaciones" data-tour="notifications" aria-haspopup="true" aria-expanded="false">
-            <?= icon('bell') ?><span id="topbar-notif" data-region><?php if ($s['unread']): ?><span class="badge success" style="position:absolute;top:-2px;right:-4px;padding:0 5px;line-height:16px;font-size:10.5px"><?= (int)$s['unread'] ?></span><?php endif; ?></span>
+            <?= icon('bell') ?><span id="topbar-notif" data-region><?php if ($s['unread']): ?><span class="badge success notif-badge" data-unread="<?= (int)$s['unread'] ?>"><?= $s['unread'] > 99 ? '99+' : (int)$s['unread'] ?></span><?php endif; ?></span>
           </button>
           <div class="menu notif-menu" role="menu"><div class="loading"></div></div>
         </div>
@@ -110,7 +151,6 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
           <div class="menu" role="menu">
             <div class="menu-title"><?= e($s['user']['name']) ?></div>
             <a href="<?= e(url('/profile')) ?>" role="menuitem"><?= icon('user') ?> Mi perfil y preferencias</a>
-            <a href="<?= e(url('/profile')) ?>#apariencia" role="menuitem"><?= icon('eye') ?> Apariencia</a>
             <button type="button" role="menuitem" data-tour-start><?= icon('play') ?> Ver el tutorial</button>
             <a href="<?= e(url('/people/' . $s['user']['id'])) ?>" role="menuitem"><?= icon('eye') ?> Mi ficha de integrante</a>
             <hr>
@@ -120,16 +160,29 @@ $currentProjectId = isset($project['id']) ? (int)$project['id'] : 0;
       </div>
     </header>
     <main class="content<?= !empty($wide) ? ' wide' : '' ?>" id="page" data-region tabindex="-1">
+      <?php /* 1.16: on every page (before: only Inicio), until the browser was asked; «Ahora no» = 7 days */ ?>
+      <div class="notice push-nudge row wrap" data-push-nudge hidden>
+        <?= icon('bell', 'sm') ?> <span class="grow">Recibe tus avisos en este dispositivo aunque Borealis esté cerrado.</span>
+        <button type="button" class="btn btn--sm btn--primary" data-push-nudge-on>Activar</button>
+        <button type="button" class="btn btn--sm btn--ghost" data-push-nudge-off>Ahora no</button>
+      </div>
       <?= $content ?>
     </main>
   </div>
 </div>
 
+<nav class="mobile-tabs" aria-label="Accesos rápidos">
+  <a href="<?= e(url('/')) ?>"<?= $nav === 'home' ? ' aria-current="page"' : '' ?>><?= icon('home') ?><span>Inicio</span></a>
+  <a href="<?= e(url('/my-work')) ?>"<?= $nav === 'my-work' ? ' aria-current="page"' : '' ?>><?= icon('check-square') ?><span>Mi trabajo</span></a>
+  <button type="button" class="mobile-tabs-add" data-dialog="dlg-new-task" aria-label="Nueva tarea"><?= icon('plus') ?></button>
+  <a href="<?= e(url('/notifications')) ?>"<?= $nav === 'notifications' ? ' aria-current="page"' : '' ?>><?= icon('inbox') ?><span>Bandeja</span><span class="count" data-nav-unread<?= $s['unread'] ? '' : ' hidden' ?>><?= $s['unread'] ? (int)$s['unread'] : '' ?></span></a>
+  <button type="button" data-sidebar-toggle aria-controls="sidebar"><?= icon('menu') ?><span>Menú</span></button>
+</nav>
 <div class="drawer-scrim" data-drawer-close></div>
 <aside class="drawer" id="drawer" aria-label="Detalle de tarea" aria-hidden="true">
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
-<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+<div class="toasts" id="toasts" role="status" aria-live="polite" popover="manual"></div>
 
 <?= partial('dialogs', ['s' => $s, 'currentProjectId' => $currentProjectId]) ?>
 </body>

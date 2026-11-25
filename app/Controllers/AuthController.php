@@ -41,11 +41,13 @@ final class AuthController
             return View::page('auth/login', ['title' => 'Iniciar sesión', 'layout' => 'auth', 'email' => $email, 'errors' => ['_' => $e->getMessage()], 'next' => (string)($r->post['next'] ?? ''), 'notice' => null], $e->status === 429 ? 429 : 422);
         }
         Auth::login($u);
+        \Borealis\Services\Activity::security('login', (int)$u['id'], 'Inició sesión', $r->ip());
         return Response::redirect($this->safeNext($r->post['next'] ?? null));
     }
 
     public function logout(Request $r): Response
     {
+        if ($uid = Auth::id()) \Borealis\Services\Activity::security('logout', (int)$uid, 'Cerró sesión', $r->ip());
         Auth::logout();
         Session::start();
         Session::flash('notice', 'Cerraste sesión.');

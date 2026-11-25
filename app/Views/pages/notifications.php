@@ -1,5 +1,5 @@
 <?php use Borealis\Services\Notifications; ?>
-<div class="page-head"><div><h1>Notificaciones</h1><p class="sub">Asignaciones, vencimientos, reuniones, sprints y cambios en tus proyectos. <a href="<?= e(url('/profile') . '#notificaciones') ?>">Elegir qué avisos recibir</a></p></div>
+<div class="page-head"><div><h1>Bandeja de entrada</h1><p class="sub">Tus notificaciones: asignaciones, vencimientos, reuniones, sprints, tareas que sigues y cambios en tus proyectos. Se actualiza sola. <a href="<?= e(url('/profile') . '#notificaciones') ?>">Elegir qué avisos recibir</a></p></div>
   <div class="page-actions"><nav class="segmented"><a href="<?= e(url('/notifications', $cat ? ['cat' => $cat] : [])) ?>"<?= !$unreadOnly ? ' aria-current="page"' : '' ?>>Todas</a><a href="<?= e(url('/notifications', ['filter' => 'unread'] + ($cat ? ['cat' => $cat] : []))) ?>"<?= $unreadOnly ? ' aria-current="page"' : '' ?>>Sin leer</a></nav>
     <button class="btn" data-call="/api/notifications/read-all"><?= icon('check') ?> Marcar todo como leído</button></div></div>
 <nav class="chips notif-cats mb" aria-label="Tipo de aviso">

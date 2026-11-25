@@ -164,8 +164,16 @@ final class TaskApi
 
     public function comment(Request $r): Response
     {
-        $id = Comments::create($r->intParam('id'), (string)$r->input('body'));
-        return Response::ok(['id' => $id], 'Comentario publicado');
+        $decision = in_array($r->input('decision'), [true, 1, '1', 'on', 'true'], true);
+        $id = Comments::create($r->intParam('id'), (string)$r->input('body'), $decision);
+        return Response::ok(['id' => $id], $decision ? 'Decisión registrada' : 'Comentario publicado');
+    }
+
+    /** 1.15 · follow / stop following a task. */
+    public function watch(Request $r): Response
+    {
+        $on = \Borealis\Services\Watchers::toggle($r->intParam('id'));
+        return Response::ok(['watching' => $on], $on ? 'Ahora sigues esta tarea' : 'Dejaste de seguir esta tarea');
     }
 
     public function updateComment(Request $r): Response

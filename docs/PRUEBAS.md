@@ -1,17 +1,60 @@
-# Resultados de pruebas — Borealis 1.14.0
+# Resultados de pruebas — Borealis 1.16.2
 
-Resultados **reales**, generados por las propias pruebas el 24/11/2026, instalando desde el ZIP. Nada de esta lista se marcó a mano.
+Resultados **reales**, generados por las propias pruebas el 25/11/2026. La integración se ejecutó instalando desde el ZIP; el navegador, desde una copia idéntica a él (`git ls-files`). Nada de esta lista se marcó a mano.
 
 | Suite | Correctas | Fallidas | Total |
 |---|---|---|---|
-| Integración HTTP (`tests/integration/run.php`, incluye `tests/unit/events-time.php`, `tests/unit/urls.php`, `tests/unit/reminders.php` y `tests/unit/analysis.php`) | 1048 | 0 | 1048 |
-| Navegador Chromium (`tests/e2e/run.mjs`) | 311 | 0 | 311 |
+| Integración HTTP (`tests/integration/run.php`, incluye las pruebas unitarias) | 1163 | 0 | 1163 |
+| Navegador Chromium (`tests/e2e/run.mjs`) | 336 | 0 | 336 |
+| Motor sin cron con Nginx + PHP-FPM reales (`tests/fpm/engine.sh`) | 14 | 0 | 14 |
+| Motor sin cron con Apache + mod_php reales (`SERVER=apache tests/fpm/engine.sh`) | 15 | 0 | 15 |
 
-**Después de esta ejecución** solo cambió un texto: la pista de carga dice «4 tareas esta semana (sin horas semanales configuradas)» en vez de repetir «esta semana». La prueba del navegador que la comprueba busca «esta semana» y sigue valiendo, pero no se volvió a ejecutar.
+**Novedades 1.16.2:** 12 comprobaciones nuevas en integración, en el grupo «1.16.2 · Correo configurado desde Administración»:
+- **Formulario y permisos:** el formulario existe, no se puede usar sin sesión y valida los datos.
+- **Errores visibles:** si el servidor no responde, lo dice con el motivo.
+- **Contraseña:** queda cifrada y nunca se muestra.
+- **Envío real con un SMTP de prueba:** con TLS y la contraseña guardada.
+- **Al instante:** la asignación sale por correo sin esperar la tarea programada, y la tarea programada no la repite.
+- **Categorías por defecto:** un cambio de fecha también llega, incluso a quien tenía las preferencias antiguas sin cambiar.
+- **Desactivar:** se puede desde la misma pantalla.
+
+**Prueba antigua ajustada (v19):** el correo de los avisos ya no lo envía la tarea programada sino la propia petición, así que la prueba espera a que llegue. En la primera ejecución fallaba precisamente por eso: el correo ya había salido antes de la tarea.
+
+**Navegador:** 336/336 con la 1.16.2.
+
+**Novedades 1.16.1:** 8 comprobaciones nuevas en integración, en el grupo «1.16.1 · …»:
+- **Asignación:** va con sonido y se queda en pantalla.
+- **«Probar con Borealis cerrado»:** responde enseguida y la prueba llega después.
+- **Sin sonido:** se puede quitar el sonido, y los avisos llegan entonces silenciosos.
+- **Perfil:** lista cada dispositivo con su última entrega.
+- **Service worker:** las opciones de sonido y «quedarse en pantalla», y la versión simple si el navegador rechaza una opción.
+
+El navegador sigue en 336/336 con la 1.16.1. Las pruebas reales con Nginx y Apache son de la 1.16.0; la 1.16.1 no toca el motor.
+
+**Novedades 1.16:**
+- **Integración:** grupos «1.16 · …» (`tests/integration/v116.php`, 21 comprobaciones). Cubren `/cron/ping` sin sesión y sus límites, el modo compatible de Apache, las preferencias por defecto y su paso desde 1.15, la asignación y el cambio de fecha que llegan cifrados con la sesión terminada, que nada se repite y la pantalla de Administración.
+- **Navegador:** un aviso que llega con una confirmación abierta se ve encima y se puede pulsar. En la primera ejecución esta prueba falló, porque el popover quedaba inerte detrás del diálogo; se corrigió moviendo la caja dentro del diálogo. También se comprueba que el service worker está activo y que `/cron/ping` responde.
+- **Servidores reales:** con una sola visita anónima, el aviso llegó al teléfono de prueba en unos 15 segundos, sin cron ni sesión. Después se cortó el motor y `/cron/ping` lo reanudó. Con Apache + mod_php, que es el caso que antes no funcionaba, pasaron 15 de 15 comprobaciones.
+- **No probado:** un teléfono real con Google, Apple o Mozilla, un servidor LiteSpeed real y el alojamiento de producción.
 
 **Entorno:** PHP 8.3.6 (servidor integrado de PHP), MariaDB 10.11, Chromium (Playwright), Linux. Cada ejecución parte de una base de datos vacía e instala Borealis desde el instalador web.
 
 **No probado todavía:** Apache con `mod_rewrite` y Nginx reales (solo el servidor integrado de PHP), MySQL 8, Safari y Firefox, lectores de pantalla, hospedaje compartido real, rendimiento con miles de tareas. **Servicios externos reales:** la entrega de avisos a un teléfono real (FCM/Mozilla/Apple), un canal de Discord real, la API real de GitHub, Google Calendar con un cliente OAuth real y un servidor de correo real. Todos se probaron contra servidores locales que imitan sus respuestas (`tests/fake-services/server.php`, `tests/fake-services/smtp.php`, `tests/fake-google/server.php`): eso prueba lo que envía Borealis (incluido el cifrado y la firma de cada aviso, que la prueba descifra y verifica), no que esos servicios lo acepten.
+
+**Novedades 1.15.1:**
+- **Motor interno de avisos.** Se probó de verdad con Nginx + PHP-FPM, como en HestiaCP, mediante `tests/fpm/engine.sh`: 12 de 12 comprobaciones correctas. No había cron, nadie inició sesión ni tenía una pestaña abierta, y la única visita fue anónima.
+  - Llegó al teléfono de prueba el aviso de una tarea escrita directamente en la base, cifrado y descifrable, sin repetirse.
+  - Hubo una sola cadena de latidos, y el motor se detuvo al aparecer un cron real.
+  - En integración: la dirección `/cron/tick` está cerrada sin clave, con GET o sin una cadena válida, no hace nada sin PHP-FPM, y Administración muestra el estado del motor.
+- **Perfil y ficha de tarea rediseñados.** Las pruebas del navegador que usan horas, seguimiento y estimaciones abren ahora su pestaña, y cada ajuste lleva un comentario en `run.mjs`. Hay una comprobación nueva: el punto rojo de «Seguimiento».
+- **Fallo encontrado por las pruebas y corregido:** al guardar un motivo de retraso, la página volvía a la pestaña Comentarios. Ahora la pestaña elegida se mantiene.
+
+**Novedades 1.15:** grupos «1.15 · …» en integración (`tests/integration/v115.php`, 68 comprobaciones) y en el navegador («Novedades 1.15», 29, incluidas las pantallas sin desplazamiento horizontal en cuatro tamaños).
+- **Avisos con la página abierta:** estado de la campana, avisos nuevos desde «after», 401 sin redirigir, ningún `window.confirm`, la consulta en segundo plano no alarga la sesión. En el navegador: cerrar un formulario con cambios pregunta dentro de Borealis, la página sigue funcionando con la pregunta abierta y no aparece ningún diálogo del navegador.
+- **Registro maestro:** acceso, intento rechazado (sin lo escrito), correo inexistente no registrado, cierre de sesión, filtros por tipo, agrupación por semana y mes, páginas por n.º sin repetir, historial de una tarea, JSON con huellas, CSV con resultado, permisos, integridad con resultados y detección al borrar un «Rechazado», opciones de conservación y continuación de la cadena tras archivar.
+- **Barra lateral, favoritos y recientes; vistas de tareas y vistas guardadas; seguidores y decisiones; automatizaciones** (vencida, bloqueo resuelto, horas superadas y bloqueo prolongado, sin repetición, en pausa, permisos y registro); **actualización 1.14 → 1.15** con la migración vuelta a aplicar.
+- **Pruebas antiguas ajustadas** a la barra lateral nueva, con el cambio indicado en cada una: «Mi calendario», el grupo «Seguimiento» y el enlace «Trabajos rápidos» de la barra, que ya no cuenta como un proyecto listado. En el navegador se ajustaron el número de categorías de avisos (dos nuevas) y el botón del menú, que ahora también está en la barra inferior del móvil.
+- **No probado en la 1.15:** la notificación del sistema operativo real (con el navegador abierto, minimizado o cerrado) y la decisión del service worker de abrir otra pestaña cuando hay cambios sin guardar, porque requieren un push real; el registro de un error 500 real; el archivado real de filas antiguas; las automatizaciones «proyecto terminado», «prioridades de la semana» e «informe del sprint».
 
 **Novedades 1.14:** grupos «1.14 · …» en integración (`tests/integration/v114.php`, 99 comprobaciones):
 - **Migración 016:** aplicada y repetida.
@@ -728,7 +771,7 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ Enlace: Invitación: la carpeta aparece una sola vez
 - ✅ Enlace: Enlace copiado de una tarea: la carpeta aparece una sola vez
 - ✅ Enlace: Dirección de regreso de Google: la carpeta aparece una sola vez
-- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.14.0)
+- ✅ Enlace: Cada módulo de JavaScript se importa con la versión (?v=1.15.1)
 - ✅ El mensaje de cuenta creada trae el enlace exacto de inicio de sesión
 - ✅ Ese enlace abre la página de inicio de sesión
 - ✅ Con los datos del mensaje se entra a Borealis
@@ -1390,6 +1433,107 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ …quien tenía un dispositivo activado pero el aviso apagado por el error de la 1.13 lo recupera; quien no tenía dispositivo, no se toca
 - ✅ …y las tareas, horas y avisos existentes siguen ahí
 
+### 1.15 · Migración 017
+
+- ✅ Migración 017: seis tablas nuevas y cuatro columnas
+- ✅ La migración 017 se puede repetir sin errores
+- ✅ Versión 1.15.1
+
+### 1.15 · Avisos con la página abierta
+
+- ✅ /api/notifications/status da los no leídos y el último aviso, sin lista la primera vez
+- ✅ …y lo nuevo desde «after» (para el aviso dentro de la página), con enlace que marca como leído
+- ✅ Sin sesión responde 401 (la página muestra un aviso y no abandona el formulario)
+- ✅ Ninguna confirmación usa window.confirm (bloquea la página); el service worker pregunta por cambios sin guardar antes de seguir un aviso
+- ✅ La consulta en segundo plano no alarga la sesión
+
+### 1.15 · Registro maestro
+
+- ✅ El inicio de sesión queda registrado (categoría seguridad, red abreviada, sin contraseña)
+- ✅ Un intento rechazado queda como «Rechazado», sin lo que se escribió
+- ✅ Un correo que no existe no se registra (no hay a quién atribuirlo)
+- ✅ El cierre de sesión también
+- ✅ Filtro por tipo: «Errores y rechazos» muestra el intento rechazado
+- ✅ …«Administración» muestra los accesos, con su color
+- ✅ Agrupado por semana, con encabezados
+- ✅ …y por mes
+- ✅ Páginas de 100 por número de registro («Más antiguos»), sin repetir ninguno
+- ✅ El historial de una tarea sale del mismo registro (con enlace a la tarea)
+- ✅ Exportación JSON con los mismos filtros, con tipo, resultado, enlace y huellas
+- ✅ El CSV agrega n.º, tipo, resultado y enlace
+- ✅ Sin permiso de auditoría no se exporta en JSON
+- ✅ La cadena sigue íntegra con resultados nuevos (la 1.14 no cambia de huella)
+- ✅ Borrar el «Rechazado» de un registro fuera de Borealis se detecta
+- ✅ Los errores del servidor entran al registro sin traza ni rutas, uno por hora
+- ✅ Conservación: sin política no archiva nada; el mínimo es 6 meses; --dry-run no toca nada
+- ✅ Sigue sin haber forma de editar o borrar el registro desde Borealis
+
+### 1.15 · Barra lateral, favoritos y recientes
+
+- ✅ La barra lateral se agrupa por áreas (Mi espacio, Organización, Seguimiento, Administración)
+- ✅ Quien no administra no ve el grupo Administración
+- ✅ En el móvil hay una barra inferior con lo frecuente
+- ✅ Los grupos plegados y la barra compacta se recuerdan en el perfil (solo valores válidos)
+- ✅ …pero el grupo de la página actual siempre se muestra abierto
+- ✅ Marcar un proyecto como favorito lo muestra arriba en la barra lateral
+- ✅ …y volver a pulsar lo quita
+- ✅ No se puede marcar un proyecto al que no se tiene acceso
+- ✅ La búsqueda rápida muestra lo abierto hace poco (primero lo último)
+- ✅ …y deja de mostrar lo que ya no se puede ver
+
+### 1.15 · Vistas de tareas y filtros guardados
+
+- ✅ «Equipo» se ve como tabla, lista compacta o tablero, agrupado por responsable
+- ✅ La vista y la agrupación elegidas se recuerdan
+- ✅ Filtro «Vencidas» y agrupación por fecha
+- ✅ Guardar una vista: solo se guardan los filtros conocidos
+- ✅ Una vista compartida aparece para el resto (cada quien ve solo lo suyo)
+- ✅ …pero solo quien la creó puede borrarla
+- ✅ Quien no puede crear proyectos guarda vistas solo para sí
+- ✅ Borrar la propia vista
+
+### 1.15 · Detalle de tarea, seguidores y decisiones
+
+- ✅ El detalle tiene cabecera con Seguir y Favorito, y en propiedades las horas reales y el progreso
+- ✅ …y el contenido en orden: descripción, dependencias, comentarios, historial
+- ✅ Seguir una tarea sin ser responsable
+- ✅ Quien sigue la tarea recibe el comentario (una vez)
+- ✅ Quien comenta pasa a seguir la tarea
+- ✅ Un comentario puede marcarse como decisión, y queda en el registro con su texto
+- ✅ …la responsable no recibe además el aviso de seguidora (no se duplica)
+- ✅ El resumen del proyecto lista sus decisiones
+- ✅ Dejar de seguir
+
+### 1.15 · Automatizaciones
+
+- ✅ Solo la administración crea automatizaciones
+- ✅ Activar una plantilla (vencidas en un proyecto) y no duplicarla
+- ✅ La página muestra la regla con su «cuándo, si, entonces»
+- ✅ La tarea programada avisa de la tarea vencida a su responsable, una sola vez aunque corra de nuevo
+- ✅ Lo que hizo queda en el registro maestro como automático
+- ✅ La regla no cambió la tarea (solo avisa)
+- ✅ Una regla en pausa no actúa
+- ✅ «Bloqueo resuelto»: al finalizar la tarea que bloqueaba, avisa a quien puede avanzar
+- ✅ …y no lo repite si se reabre y se vuelve a finalizar
+- ✅ «Superó las horas acordadas» y «Bloqueo prolongado» avisan a quien lleva el proyecto
+- ✅ Eliminar una automatización queda registrado
+- ✅ Cada persona puede apagar los avisos de automatizaciones y de tareas que sigue en su perfil (categorías propias)
+
+### 1.15 · Actualización desde la 1.14
+
+- ✅ Al actualizar se aplica la 017 y no se pierde nada del registro
+- ✅ …y la integridad sigue comprobándose bien
+- ✅ Si se borran registros antiguos sin archivarlos se detecta; archivados (con el punto de partida), la cadena sigue válida
+
+### 1.15 · Motor interno de avisos
+
+- ✅ /cron/tick sin la clave se rechaza (403) y no dice nada de la instalación
+- ✅ /cron/tick por GET no hace nada (405)
+- ✅ Con la clave pero sin una cadena válida no hace nada (409)
+- ✅ Sin PHP-FPM (php -S) el motor queda apagado: la tarea programada sigue disponible
+- ✅ Administración › Notificaciones muestra el estado del motor interno (aquí: no disponible sin PHP-FPM, o en reposo porque el cron de las pruebas ya corrió)
+- ✅ El motor no se activa en la página de inicio de sesión sin PHP-FPM ni deja archivos
+
 ## Navegador (Chromium)
 
 ### Instalación desde el navegador
@@ -1695,6 +1839,7 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ Riesgos y alertas explica cada alerta y permite marcarla como revisada
 - ✅ Marcar una alerta como revisada la deja con quién la revisó
 - ✅ El informe se descarga en CSV
+- ✅ 1.15: la pestaña «Seguimiento» marca que necesita atención
 - ✅ La ficha de la tarea tiene «Seguimiento» con la desviación de horas
 - ✅ Con una desviación importante el formulario del motivo aparece abierto (opcional)
 - ✅ El motivo queda registrado con autor y fecha
@@ -1754,6 +1899,28 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 - ✅ «Comprobar integridad» confirma la cadena
 - ✅ Administración › Notificaciones dice el estado de la tarea programada
 - ✅ Análisis por trimestre con «¿Qué ocurrió en el período?»
+
+### Novedades 1.15
+
+- ✅ Cerrar un formulario con cambios pregunta dentro de Borealis (no con un diálogo del navegador)
+- ✅ Mientras pregunta, la página sigue funcionando (el hilo principal no queda congelado)
+- ✅ «Seguir editando» conserva lo escrito
+- ✅ La consulta de avisos funciona con el formulario abierto y no navega
+- ✅ «Cerrar sin guardar» cierra el formulario
+- ✅ Ningún diálogo bloqueante del navegador en todo el recorrido
+- ✅ La barra lateral muestra las áreas
+- ✅ Un grupo plegado se recuerda al volver
+- ✅ La barra se compacta a solo iconos
+- ✅ Un proyecto marcado con la estrella aparece en «Favoritos»
+- ✅ Al enfocar la búsqueda se ven favoritos y lo abierto hace poco
+- ✅ En el móvil hay barra inferior con Inicio, Mi trabajo, Nueva, Bandeja y Menú
+- ✅ Tablero de tareas del equipo
+- ✅ Lista compacta agrupada por responsable
+- ✅ Se recuerda la última vista elegida
+- ✅ Abrir desde la lista muestra el panel lateral con Seguir, propiedades y progreso
+- ✅ Al cerrar el panel se queda en la misma vista
+- ✅ El registro maestro muestra la línea de tiempo por día con colores por tipo
+- ✅ Activar una plantilla de automatización desde la página
 - ✅ escritorio 1440×900: sin desplazamiento horizontal de página
 - ✅ portatil 1280×800: sin desplazamiento horizontal de página
 - ✅ tableta 820×1180: sin desplazamiento horizontal de página
@@ -1769,9 +1936,26 @@ Otros fallos eran de las propias pruebas: selectores que encontraban dos formula
 
 - ✅ Sin errores de JavaScript en la consola durante todo el recorrido
 
+## Motor interno de avisos (Nginx + PHP-FPM real, `tests/fpm/engine.sh`)
+
+Intervalo de prueba: 15 s. Sin cron, sin sesión iniciada y sin pestañas abiertas; la única petición de una persona es una visita anónima a la página de inicio de sesión.
+
+- ✅ POST /cron/tick sin clave se rechaza (403)
+- ✅ GET /cron/tick no hace nada (405)
+- ✅ La visita a la página de inicio de sesión arranca el motor
+- ✅ Sin cron, sin sesión y sin pestañas abiertas, el aviso llega al teléfono (en 15 s)
+- ✅ El recordatorio de la tarea se creó en la campana
+- ✅ El teléfono descifra el aviso y nombra la tarea
+- ✅ La ejecución quedó registrada como «motor interno»
+- ✅ Entre tanto ninguna persona hizo otra petición (solo la visita inicial)
+- ✅ El motor late de forma continua (≥ 2 latidos)
+- ✅ El mismo aviso no se envía dos veces
+- ✅ Una sola cadena (no se multiplican los latidos)
+- ✅ Al detectar el cron, el motor se detiene («cron»)
+
 ## Capturas
 
-En `docs/capturas/`: escritorio (1440×900), portátil (1280×800), tableta (820×1180) y móvil (390×844) de Inicio, Mi trabajo, Proyectos, Resumen, Tablero, Lista, Calendario y Equipos, más el menú lateral en tableta y móvil, el detalle de tarea, el resumen al completar un proyecto y la importación. Novedades 1.1: cierre de tarea con comentario y horas, horas en el detalle, apariencia del proyecto, informe imprimible, control del sprint, reportes con horas, barra lateral y aviso de cuenta fantasma (archivos que empiezan por `11-`). Novedades 1.2: invitación con enlace, editar cuenta, equipo en el proyecto, varios responsables, personas en el tablero, perfil con horas e importación (archivos que empiezan por `12-`). Novedades 1.3: responsables seguidos, tablero con horas y «Sin disponibilidad», horas por persona en el sprint (archivos que empiezan por `13-`). Novedades 1.4: tutorial, sprints por estado, archivos en cuadrícula y lista, Apariencia y fondo Medieval (archivos que empiezan por `14-`). Novedades 1.12: Monitoreo (resumen, cumplimiento, carga, tiempos, alertas, informe), «Seguimiento» en la ficha, umbrales y móvil (archivos que empiezan por `40-`). Novedades 1.14: trabajos rápidos, nuevo proyecto, estimaciones, carta Gantt (escritorio y móvil), auditoría, Administración › Notificaciones y Análisis por período (archivos `50-` a `56-`).
+En `docs/capturas/`: escritorio (1440×900), portátil (1280×800), tableta (820×1180) y móvil (390×844) de Inicio, Mi trabajo, Proyectos, Resumen, Tablero, Lista, Calendario y Equipos, más el menú lateral en tableta y móvil, el detalle de tarea, el resumen al completar un proyecto y la importación. Novedades 1.1: cierre de tarea con comentario y horas, horas en el detalle, apariencia del proyecto, informe imprimible, control del sprint, reportes con horas, barra lateral y aviso de cuenta fantasma (archivos que empiezan por `11-`). Novedades 1.2: invitación con enlace, editar cuenta, equipo en el proyecto, varios responsables, personas en el tablero, perfil con horas e importación (archivos que empiezan por `12-`). Novedades 1.3: responsables seguidos, tablero con horas y «Sin disponibilidad», horas por persona en el sprint (archivos que empiezan por `13-`). Novedades 1.4: tutorial, sprints por estado, archivos en cuadrícula y lista, Apariencia y fondo Medieval (archivos que empiezan por `14-`). Novedades 1.12: Monitoreo (resumen, cumplimiento, carga, tiempos, alertas, informe), «Seguimiento» en la ficha, umbrales y móvil (archivos que empiezan por `40-`). Novedades 1.14: trabajos rápidos, nuevo proyecto, estimaciones, carta Gantt (escritorio y móvil), auditoría, Administración › Notificaciones y Análisis por período (archivos `50-` a `56-`). Novedades 1.15: barra compacta y por áreas, barra inferior del móvil, tablero de tareas del equipo, detalle en tres zonas, registro maestro y automatizaciones (archivos `57-` a `63-`).
 
 ## Cómo repetirlas
 

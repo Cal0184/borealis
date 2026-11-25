@@ -6,7 +6,7 @@ namespace Borealis\Services;
 /**
  * E-mail (1.9), without external libraries.
  *
- * Transports (config/config.php › 'mail', never in the code):
+ * Transports (config/config.php › 'mail', or since 1.16.2 Administración › Datos › Correo: MailSettings):
  *  - 'smtp': authenticated SMTP with STARTTLS (port 587) or implicit TLS (port 465). The certificate
  *    is verified. The password can also come from the BOREALIS_SMTP_PASSWORD environment variable.
  *  - 'sendmail': PHP mail(), i.e. the server's own mail system (HestiaCP: Exim). Only if the
@@ -21,14 +21,14 @@ final class Mailer
 
     public static function transport(): string
     {
-        $t = (string)config('mail.transport', '');
+        $t = (string)MailSettings::get('transport', '');
         return in_array($t, ['smtp', 'sendmail'], true) ? $t : 'none';
     }
 
     public static function configured(): bool
     {
         return match (self::transport()) {
-            'smtp' => trim((string)config('mail.host', '')) !== '' && filter_var(self::from(), FILTER_VALIDATE_EMAIL) !== false,
+            'smtp' => trim((string)MailSettings::get('host', '')) !== '' && filter_var(self::from(), FILTER_VALIDATE_EMAIL) !== false,
             'sendmail' => function_exists('mail') && filter_var(self::from(), FILTER_VALIDATE_EMAIL) !== false,
             default => false,
         };
@@ -37,25 +37,25 @@ final class Mailer
     /** Public description for the administration page (never the password). */
     public static function describe(): array
     {
-        return ['transport' => self::transport(), 'configured' => self::configured(), 'host' => (string)config('mail.host', ''), 'port' => (int)config('mail.port', 587),
-            'encryption' => self::encryption(), 'username' => (string)config('mail.username', ''), 'from' => self::from(), 'from_name' => self::fromName()];
+        return ['transport' => self::transport(), 'configured' => self::configured(), 'host' => (string)MailSettings::get('host', ''), 'port' => (int)MailSettings::get('port', 587),
+            'encryption' => self::encryption(), 'username' => (string)MailSettings::get('username', ''), 'from' => self::from(), 'from_name' => self::fromName()];
     }
 
     private static function from(): string
     {
-        return trim((string)config('mail.from_address', ''));
+        return trim((string)MailSettings::get('from_address', ''));
     }
 
     private static function fromName(): string
     {
-        return trim((string)config('mail.from_name', 'Borealis')) ?: 'Borealis';
+        return trim((string)MailSettings::get('from_name', 'Borealis')) ?: 'Borealis';
     }
 
     private static function encryption(): string
     {
-        $e = strtolower((string)config('mail.encryption', ''));
+        $e = strtolower((string)MailSettings::get('encryption', ''));
         if (in_array($e, ['tls', 'ssl', 'none'], true)) return $e;
-        return (int)config('mail.port', 587) === 465 ? 'ssl' : 'tls';
+        return (int)MailSettings::get('port', 587) === 465 ? 'ssl' : 'tls';
     }
 
     /** Sends one message. Throws \RuntimeException with a reason the administration can act on. */
@@ -64,13 +64,20 @@ final class Mailer
         if (!self::configured()) throw new \RuntimeException('El correo no está configurado en esta instalación.');
         if (!filter_var($to, FILTER_VALIDATE_EMAIL) || preg_match('/[\r\n]/', $to)) throw new \RuntimeException('Dirección de correo no válida.');
         $msg = self::build($to, $subject, $text, $html);
-        if (self::transport() === 'sendmail') {
-            [$headers, $body] = explode("\r\n\r\n", $msg, 2);
-            $headers = preg_replace('/^(To|Subject): .*\r\n/m', '', $headers . "\r\n");
-            if (!@mail($to, self::encodeHeader($subject), $body, rtrim($headers), '-f' . self::from())) throw new \RuntimeException('El sistema de correo del servidor no aceptó el mensaje.');
-            return;
+        // 1.16.2: the last success and the last error are kept for Administración
+        try {
+            if (self::transport() === 'sendmail') {
+                [$headers, $body] = explode("\r\n\r\n", $msg, 2);
+                $headers = preg_replace('/^(To|Subject): .*\r\n/m', '', $headers . "\r\n");
+                if (!@mail($to, self::encodeHeader($subject), $body, rtrim($headers), '-f' . self::from())) throw new \RuntimeException('El sistema de correo del servidor no aceptó el mensaje.');
+            } else {
+                self::smtp($to, $msg);
+            }
+        } catch (\RuntimeException $e) {
+            MailSettings::record($e->getMessage());
+            throw $e;
         }
-        self::smtp($to, $msg);
+        MailSettings::record(null);
     }
 
     private static function encodeHeader(string $s): string
@@ -111,13 +118,13 @@ final class Mailer
     private static function smtp(string $to, string $msg): void
     {
         self::$trace = [];
-        $host = (string)config('mail.host');
-        $port = (int)config('mail.port', 587);
+        $host = (string)MailSettings::get('host');
+        $port = (int)MailSettings::get('port', 587);
         $enc = self::encryption();
-        $timeout = (int)config('mail.timeout', 15);
+        $timeout = (int)MailSettings::get('timeout', 15);
         $ctx = stream_context_create(['ssl' => array_filter([
-            'verify_peer' => (bool)config('mail.verify_peer', true), 'verify_peer_name' => (bool)config('mail.verify_peer', true),
-            'cafile' => config('mail.cafile') ?: null, 'peer_name' => $host, 'SNI_enabled' => true,
+            'verify_peer' => (bool)MailSettings::get('verify_peer', true), 'verify_peer_name' => (bool)MailSettings::get('verify_peer', true),
+            'cafile' => MailSettings::get('cafile') ?: null, 'peer_name' => $host, 'SNI_enabled' => true,
         ], fn($v) => $v !== null)]);
         $fp = @stream_socket_client(($enc === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $ctx);
         if (!$fp) throw new \RuntimeException("No se pudo conectar con el servidor de correo $host:$port ($errstr).");
@@ -134,8 +141,8 @@ final class Mailer
                 }
                 $caps = self::cmd($fp, "EHLO $ehlo", [250]);
             }
-            $user = (string)config('mail.username', '');
-            $pass = (string)(getenv('BOREALIS_SMTP_PASSWORD') ?: config('mail.password', ''));
+            $user = (string)MailSettings::get('username', '');
+            $pass = (string)(getenv('BOREALIS_SMTP_PASSWORD') ?: MailSettings::get('password', ''));
             if ($user !== '') {
                 if ($enc === 'none' && !self::localHost($host)) throw new \RuntimeException('Sin cifrado solo se permite un servidor de correo local; usa el puerto 587 (STARTTLS) o 465 (SSL).');
                 if (preg_match('/^250[ -]AUTH[ =].*PLAIN/mi', $caps)) {

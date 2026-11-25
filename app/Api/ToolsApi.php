@@ -28,7 +28,7 @@ final class ToolsApi
     public function mailTest(Request $r): Response
     {
         if (!\Borealis\Security\AccountPolicy::isInstanceAdmin()) throw HttpException::forbidden('Solo la administración de la instalación puede probar el correo.');
-        if (!Mailer::configured()) throw HttpException::conflict('El correo no está configurado: añade la sección «mail» en config/config.php (README › Correo).');
+        if (!Mailer::configured()) throw HttpException::conflict('El correo no está configurado: complétalo en Administración › Datos › Correo.');
         $to = (string)Auth::user()['email'];
         try {
             Mailer::send($to, 'Borealis · correo de prueba', "Hola,\n\nEste es un correo de prueba de Borealis. Si lo recibes, los avisos por correo funcionan.\n\n" . absolute_url('/'));
@@ -36,6 +36,21 @@ final class ToolsApi
             throw HttpException::conflict('No se pudo enviar: ' . $e->getMessage());
         }
         return Response::ok([], "Correo de prueba enviado a $to. Revisa la bandeja de entrada (y la de spam).");
+    }
+
+    /** 1.16.2: Administración › Datos › Correo, saved without editing config/config.php; sends a test at once. */
+    public function mailSave(Request $r): Response
+    {
+        if (!\Borealis\Security\AccountPolicy::isInstanceAdmin()) throw HttpException::forbidden('Solo la administración de la instalación puede configurar el correo.');
+        \Borealis\Services\MailSettings::save($r->input());
+        if (!Mailer::configured()) return Response::ok([], 'Correo desactivado.');
+        $to = (string)Auth::user()['email'];
+        try {
+            Mailer::send($to, 'Borealis · correo de prueba', "Hola,\n\nEste es un correo de prueba de Borealis. Si lo recibes, los avisos por correo funcionan.\n\n" . absolute_url('/'));
+        } catch (\RuntimeException $e) {
+            throw HttpException::conflict('Se guardó, pero el correo de prueba no salió: ' . $e->getMessage());
+        }
+        return Response::ok([], "Guardado. Correo de prueba enviado a $to: revisa la bandeja de entrada (y la de spam).");
     }
 
     public function pushKey(Request $r): Response
@@ -69,7 +84,21 @@ final class ToolsApi
         $subs = Database::get()->all('SELECT * FROM push_subscriptions WHERE user_id = ?', [Auth::id()]);
         if (!$subs) throw HttpException::invalid(['push' => 'Primero activa las notificaciones en este dispositivo.']);
         $ok = 0;
-        $payload = json_encode(['title' => 'Borealis', 'body' => 'Las notificaciones funcionan en este dispositivo.', 'url' => url('/profile') . '#notificaciones', 'tag' => 'borealis-test'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        // 1.16.1 · «Probar con Borealis cerrado»: the server answers now and sends the test N seconds
+        // later, so the person can close every tab and see the notice arrive from the system.
+        $delay = max(0, min(60, (int)$r->input('delay', 0)));
+        $attn = Push::attention((int)Auth::id(), 'assigned');
+        if ($delay > 0) {
+            $body = 'Prueba con Borealis cerrado: si ves esto, los avisos llegan aunque no tengas ninguna pestaña abierta.';
+            $payload = json_encode(['title' => 'Borealis', 'body' => $body, 'url' => url('/profile') . '#notificaciones', 'tag' => 'borealis-test-cerrado'] + $attn, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            register_shutdown_function(function () use ($subs, $payload, $delay) {
+                \Borealis\Core\Background::detach();
+                sleep($delay);
+                foreach ($subs as $s) { try { Push::deliver($s, $payload, 'high'); } catch (\Throwable $e) { error_log('[Borealis] prueba: ' . $e->getMessage()); } }
+            });
+            return Response::ok(['sent' => 0, 'delay' => $delay, 'devices' => count($subs)], "Cierra Borealis ahora: la prueba llega en $delay segundos a " . (count($subs) === 1 ? 'tu dispositivo' : count($subs) . ' dispositivos') . '.');
+        }
+        $payload = json_encode(['title' => 'Borealis', 'body' => 'Las notificaciones funcionan en este dispositivo.', 'url' => url('/profile') . '#notificaciones', 'tag' => 'borealis-test'] + $attn, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         foreach ($subs as $s) if (Push::deliver($s, $payload, 'normal')) $ok++;
         if (!$ok) {
             $err = (string)Database::get()->value('SELECT last_error FROM push_subscriptions WHERE user_id = ? AND last_error IS NOT NULL ORDER BY id DESC LIMIT 1', [Auth::id()]);

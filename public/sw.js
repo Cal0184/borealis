@@ -2,7 +2,7 @@
 // It does NOT cache pages, data or files of Borealis: after an update the browser always gets the new
 // version, and nothing private (projects, sessions, people) is ever stored on the device. The only
 // thing kept is the static «Sin conexión» page, shown when a page cannot be loaded at all.
-const VERSION = '1.14.0';
+const VERSION = '1.16.2';
 const scope = self.registration.scope; // e.g. https://example.org/borealis/
 const OFFLINE = 'borealis-offline-' + VERSION;
 
@@ -36,21 +36,66 @@ self.addEventListener('push', (event) => {
     try { const d = event.data?.json(); if (d?.body) items = [d]; } catch { /* no content */ }
     items ??= await pending();
     for (const n of items.slice(0, 3)) {
-      await self.registration.showNotification(n.title || 'Borealis', {
-        body: n.body, tag: n.tag || `borealis-${n.id || Date.now()}`, renotify: false,
-        icon: new URL('assets/img/app-192.png', scope).href, badge: new URL('assets/img/app-badge.png', scope).href,
-        data: { url: n.url || new URL('notifications', scope).href, v: VERSION },
-      });
+      try { await show(n); } catch {
+        // a browser that rejects an option still shows the notice, plainly
+        await self.registration.showNotification(n.title || 'Borealis', { body: n.body, tag: n.tag, data: { url: n.url || new URL('notifications', scope).href, v: VERSION } });
+      }
     }
+    // 1.15: open pages update their bell at once (notify-live.js), whatever they are showing
+    for (const w of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) w.postMessage({ type: 'borealis-push' });
+    await ping('push');
   })());
 });
+
+// 1.16.1: with sound (the device's system sound) unless the person turned it off; important notices
+// stay on screen until closed; a notice that replaces another one with the same tag alerts again.
+function show(n) {
+  return self.registration.showNotification(n.title || 'Borealis', {
+    body: n.body, tag: n.tag || `borealis-${n.id || Date.now()}`, renotify: true,
+    silent: !!n.silent, requireInteraction: !!n.sticky, timestamp: Date.now(),
+    ...(n.silent ? {} : { vibrate: [200, 100, 200] }),
+    icon: new URL('assets/img/app-192.png', scope).href, badge: new URL('assets/img/app-badge.png', scope).href,
+    data: { url: n.url || new URL('notifications', scope).href, v: VERSION },
+  });
+}
+
+// 1.16 · «somebody is around»: tells Borealis to keep its notification engine and scheduled job
+// running (cron/ping, no session, no data). Called when this device receives a notice and when the
+// browser wakes Borealis up by itself (periodic background sync: Chrome, Edge and Android with
+// Borealis installed as an app; the browser decides how often, usually every few hours).
+async function ping(src) {
+  try { await fetch(new URL('cron/ping?src=' + src, scope), { method: 'POST', credentials: 'omit', cache: 'no-store', keepalive: true }); } catch { /* offline */ }
+}
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'borealis-ping') event.waitUntil(ping('sync'));
+});
+
+// 1.15: does this window have unsaved changes? Asked before following a notice; a page that does not
+// answer in time (frozen by a dialog, or an old version) is treated as «yes», so nothing is lost.
+function hasUnsaved(w) {
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    const t = setTimeout(() => resolve(true), 700);
+    ch.port1.onmessage = (e) => { clearTimeout(t); resolve(!!e.data?.dirty); };
+    try { w.postMessage({ type: 'borealis-dirty?' }, [ch.port2]); } catch { clearTimeout(t); resolve(true); }
+  });
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = new URL(event.notification.data?.url || '', scope).href;
   event.waitUntil((async () => {
+    ping('open');
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) if (w.url.startsWith(scope) && 'focus' in w) { await w.navigate(url).catch(() => {}); return w.focus(); }
+    // a window of Borealis without unsaved changes goes to the notice; one with unsaved changes stays
+    // as it is and the notice opens in a new window (before 1.15 it navigated away from the form)
+    for (const w of wins) {
+      if (!w.url.startsWith(scope) || !('focus' in w)) continue;
+      if (await hasUnsaved(w)) break;
+      const moved = await w.navigate(url).catch(() => null);
+      if (moved) return moved.focus();
+      break;
+    }
     return self.clients.openWindow(url);
   })());
 });

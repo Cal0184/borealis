@@ -2,7 +2,8 @@
 /** 1.14 · Administración › Notificaciones */
 $st = $job['state'];
 $row = $job['row'];
-$labels = ['cli' => 'cron (php bin/notify.php)', 'http' => 'cron por dirección (/cron/run)', 'visit' => 'una visita a Borealis (respaldo)'];
+$labels = ['cli' => 'cron (php bin/notify.php)', 'http' => 'cron por dirección (/cron/run)', 'visit' => 'una visita a Borealis (respaldo)', 'engine' => 'el motor interno de Borealis', 'device' => 'un dispositivo que recibió un aviso (service worker)'];
+$hb = \Borealis\Services\Heartbeat::status();
 $c = $stats['counts'];
 $cmd = 'cd ' . $basePath . ' && /usr/bin/php' . $phpVersion . ' bin/notify.php >> storage/logs/notify.log 2>&1';
 ?>
@@ -22,20 +23,41 @@ $cmd = 'cd ' . $basePath . ' && /usr/bin/php' . $phpVersion . ' bin/notify.php >
     <?php else: ?>
       <p class="notice notice--danger"><?= icon('alert', 'sm') ?> La última ejecución terminó con errores: <?= e($row['last_error']) ?></p>
     <?php endif; ?>
+    <div class="engine-box" data-engine="<?= $hb['alive'] ? 'on' : ($hb['cron'] ? 'cron' : ($hb['enabled'] ? 'off' : 'unavailable')) ?>">
+      <h3 class="small-title"><?= icon('repeat', 'sm') ?> Motor interno de avisos <span class="muted small">(1.15)</span></h3>
+      <?php if ($hb['alive']): ?>
+        <p class="small"><span class="badge success">Funcionando</span> Último latido hace <?= (int)$hb['seconds'] ?> s · <?= (int)$hb['ticks'] ?> latidos desde <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$hb['since']))) ?>. Los avisos llegan aunque nadie tenga Borealis abierto ni haya iniciado sesión.</p>
+      <?php elseif ($hb['cron']): ?>
+        <p class="small"><span class="badge">En reposo</span> La tarea programada del servidor ya se ejecuta, así que el motor interno no hace falta. Si el cron deja de funcionar, el motor vuelve a arrancar solo.</p>
+      <?php elseif ($hb['enabled']): ?>
+        <p class="small"><span class="badge warn">Detenido</span> <?= $hb['error'] ? 'No pudo llamarse a sí mismo: ' . e($hb['error']) . '.' : 'Arranca con la próxima visita a cualquier página.' ?> Revisa que el servidor pueda abrir su propia dirección (<code><?= e(\Borealis\Services\Heartbeat::tickUrl()) ?></code>) o configura la tarea programada.</p>
+      <?php else: ?>
+        <p class="small"><span class="badge">No disponible</span> <?= $hb['fpm'] ? 'Desactivado en config/config.php (cron.heartbeat).' : 'Este servidor no puede seguir trabajando después de responder; usa el servicio externo gratuito de abajo.' ?></p>
+      <?php endif; ?>
+      <p class="small muted">Servidor: <strong data-server-mode><?= e($hb['server']) ?></strong>. El motor mantiene los avisos funcionando sin configurar nada; si el alojamiento lo detiene (reinicio, límite de tiempo), vuelve a arrancar con la siguiente visita o con el siguiente aviso que reciba cualquier dispositivo.</p>
+    </div>
     <?php if ($row && $row['last_summary']): ?><p class="small muted"><?= e($row['last_summary']) ?> · <?= (int)$row['runs'] ?> ejecuciones en total</p><?php endif; ?>
 
-    <h3 class="mt">Configurar en HestiaCP</h3>
-    <ol class="small">
-      <li>Panel de HestiaCP › <strong>Cron Jobs</strong> › <strong>Add Cron Job</strong>.</li>
-      <li>Minuto <code>*/5</code>, y <code>*</code> en hora, día, mes y día de la semana.</li>
-      <li>Comando (usa la misma versión de PHP del sitio; esta instalación corre PHP <?= e($phpVersion) ?>):<br>
-        <code class="copyable" data-copy-text="<?= e($cmd) ?>"><?= e($cmd) ?></code> <button class="btn btn--sm btn--ghost" type="button" data-copy="<?= e($cmd) ?>" data-copy-msg="Comando copiado"><?= icon('copy', 'sm') ?> Copiar</button></li>
-    </ol>
+    <h3 class="mt">Qué funciona sin acceso al servidor</h3>
+    <ul class="small" data-layers>
+      <li><strong>Al instante, sin configurar nada:</strong> asignaciones, cambios de fecha y de estado, comentarios, menciones y alertas se envían a los dispositivos en el mismo momento en que ocurren, aunque la persona que los recibe tenga Borealis cerrado o su sesión haya caducado.</li>
+      <li><strong>Recordatorios por hora</strong> (por vencer, vencidas, reuniones, sprints, monitoreo): los crea la tarea programada. Borealis la mantiene funcionando solo con el motor interno, con cada visita y con cada dispositivo que recibe un aviso.</li>
+      <li><strong>Garantía completa, gratis y en 5 minutos:</strong> un servicio externo que abra la dirección secreta de abajo cada 5 minutos. Así los recordatorios llegan a su hora también después de un reinicio del servidor, de noche y en fin de semana, sin que nadie entre. No hace falta SSH, cron ni instalar nada.</li>
+    </ul>
     <?php if ($isInstanceAdmin && $cronUrl): ?>
-      <p class="small">Si tu alojamiento solo permite llamar a una dirección, usa esta en su lugar (es secreta: quien la tenga puede iniciar la tarea, no ver datos):</p>
-      <p><code class="copyable" data-cron-url><?= e('curl -fsS "' . $cronUrl . '" >/dev/null') ?></code> <button class="btn btn--sm btn--ghost" type="button" data-copy="<?= e('curl -fsS "' . $cronUrl . '" >/dev/null') ?>" data-copy-msg="Comando copiado"><?= icon('copy', 'sm') ?> Copiar</button>
+      <h3 class="mt">Servicio externo (recomendado)</h3>
+      <ol class="small">
+        <li>Crea una cuenta gratuita en <strong>cron-job.org</strong> (o en otro servicio que visite direcciones, como UptimeRobot).</li>
+        <li><strong>Create cronjob</strong> › URL: pega esta dirección · Execution schedule: <strong>Every 5 minutes</strong> · Guardar.</li>
+      </ol>
+      <p><code class="copyable" data-cron-url><?= e($cronUrl) ?></code> <button class="btn btn--sm btn--ghost" type="button" data-copy="<?= e($cronUrl) ?>" data-copy-msg="Dirección copiada"><?= icon('copy', 'sm') ?> Copiar</button>
         <button class="btn btn--sm btn--ghost" type="button" data-call="/api/admin/cron-token" data-confirm="La dirección actual dejará de funcionar. ¿Generar una nueva?"><?= icon('key', 'sm') ?> Generar otra</button></p>
+      <p class="hint">La dirección es secreta: quien la tenga solo puede iniciar la tarea (nunca ver datos), y no se ejecuta dos veces en menos de un minuto. Si se filtra, pulsa «Generar otra» y cámbiala en el servicio. Cuando el servicio funcione, arriba dirá «cron por dirección».</p>
     <?php endif; ?>
+    <details class="small mt"><summary>Si tu alojamiento tiene un panel con «Tareas Cron»</summary>
+      <p>Cada 5 minutos, con la misma versión de PHP del sitio (PHP <?= e($phpVersion) ?>):<br>
+        <code class="copyable" data-copy-text="<?= e($cmd) ?>"><?= e($cmd) ?></code> <button class="btn btn--sm btn--ghost" type="button" data-copy="<?= e($cmd) ?>" data-copy-msg="Comando copiado"><?= icon('copy', 'sm') ?> Copiar</button></p>
+    </details>
   </div>
 </section>
 

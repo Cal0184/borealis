@@ -2049,7 +2049,7 @@ check('Eliminarla vuelve a mostrar las iniciales', $noraC->status === 200 && $q(
 
 group('1.7 · Menú lateral');
 $noraC->get('/calendar');
-check('«Calendario» está en el menú lateral con su icono y queda marcado al abrirlo', (bool)preg_match('#<a class="nav-item" data-tour="nav-calendar" href="[^"]*/calendar" aria-current="page"><svg[^>]*><use href="[^"]*\#i-calendar"#', $noraC->body), snippet($noraC));
+check('«Calendario» está en el menú lateral con su icono y queda marcado al abrirlo', (bool)preg_match('#<a class="nav-item" href="[^"]*/calendar" data-tour="nav-calendar" aria-current="page"[^>]*><svg[^>]*><use href="[^"]*\#i-calendar"#', $noraC->body) /* 1.15: inside «Mi espacio» as «Mi calendario» */, snippet($noraC));
 $css17 = (string)file_get_contents(dirname(__DIR__, 2) . '/public/assets/css/borealis.css');
 check('La barra lateral ya no dibuja una barra de desplazamiento (sigue desplazándose)', str_contains($css17, '.sidebar { scrollbar-width: none;') && str_contains($css17, '.sidebar::-webkit-scrollbar { display: none;'));
 
@@ -2116,6 +2116,8 @@ require __DIR__ . '/v111.php';
 require __DIR__ . '/v112.php';
 require __DIR__ . '/v113.php';
 require __DIR__ . '/v114.php';
+require __DIR__ . '/v115.php';
+require __DIR__ . '/v116.php';
 
 // ---------------------------------------------------------------- summary
 $pass = count(array_filter($results, fn($r) => $r['ok']));
