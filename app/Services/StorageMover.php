@@ -59,6 +59,8 @@ final class StorageMover
     {
         $from = storage_path();
         if (self::placement($from) === 'outside') throw new \RuntimeException('La carpeta de datos ya está fuera de la carpeta web.');
+        // 1.16.6: from one secret folder to another gains nothing (and renewed the key every time)
+        if (self::placement($from) === 'secret' && self::target()['kind'] === 'secret') throw new \RuntimeException('La carpeta de datos ya tiene un nombre secreto y este servidor no deja guardarla fuera de la carpeta web.');
         $cfgDir = BASE_PATH . '/config';
         if (!is_writable($cfgDir)) throw new \RuntimeException('Borealis no puede escribir en config/: dale permiso de escritura por FTP (clic derecho › Permisos de archivo › 755) y vuelve a intentarlo.');
         $t = self::target();

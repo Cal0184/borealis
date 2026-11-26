@@ -51,7 +51,7 @@ function absolute_url(string $path = '/', array $query = []): string
 function asset(string $path): string
 {
     $base = rtrim((string)config('app.base_path', ''), '/');
-    $file = BASE_PATH . '/public/assets/' . ltrim($path, '/');
+    $file = (defined('PUBLIC_PATH') ? PUBLIC_PATH : BASE_PATH . '/public') . '/assets/' . ltrim($path, '/');
     $v = is_file($file) ? substr(md5((string)filemtime($file)), 0, 8) : BOREALIS_VERSION;
     return $base . '/assets/' . ltrim($path, '/') . '?v=' . $v;
 }

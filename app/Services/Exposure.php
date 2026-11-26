@@ -55,9 +55,26 @@ final class Exposure
         return $origin . $base;
     }
 
-    public static function check(): array
+    /**
+     * 1.16.6 · Address of the Borealis folder itself (where app/, config/, storage/ are), which is not always
+     * the address of the pages: with Nginx and everything uploaded, the pages are at …/public; with the public
+     * files apart (nucleo.php), the core is a folder inside them.
+     */
+    public static function coreUrl(): string
     {
         $base = self::baseUrl();
+        if ($base === '') return '';
+        $norm = static fn(string $p): string => rtrim(str_replace('\\', '/', (string)(realpath($p) ?: $p)), '/');
+        $core = $norm(BASE_PATH);
+        $pub = $norm(defined('PUBLIC_PATH') ? PUBLIC_PATH : BASE_PATH . '/public');
+        if (str_starts_with($core . '/', $pub . '/') && $core !== $pub) return $base . substr($core, strlen($pub));
+        if ($pub === $core . '/public' && str_ends_with($base, '/public')) return substr($base, 0, -strlen('/public'));
+        return $base;
+    }
+
+    public static function check(): array
+    {
+        $base = self::coreUrl();
         $res = ['status' => 'unknown', 'checked_at' => time(), 'urls' => [], 'detail' => ''];
         if ($base === '' || !function_exists('curl_init')) {
             $res['detail'] = $base === '' ? 'Falta app.url en config/config.php.' : 'Falta la extensión curl de PHP.';
@@ -76,10 +93,15 @@ final class Exposure
             // 1.16.5: the data folder where it is now (nothing to ask when it is outside the web folder)
             $targets = [];
             $rel = self::relative(storage_path());
-            if ($placement !== 'outside' && $rel !== null) $targets[$base . '/' . $rel . '/' . $probeName] = ['storage', $secret];
+            // 1.16.6: a folder with a secret name is downloadable by design if someone knows the name (Nginx serves
+            // files): asking for it by name proves nothing and kept the alert red forever. What matters there
+            // is that no address lists the folders (below), so the name cannot be found.
+            if ($placement === 'web' && $rel !== null) $targets[$base . '/' . $rel . '/' . $probeName] = ['storage', $secret];
             $targets[$base . '/config/config.php'] = ['php', '<?php'];
             $targets[$base . '/database/migrations/001_core.sql'] = ['code', 'CREATE TABLE'];
             if ($placement === 'secret') $targets[$base . '/'] = ['listing', basename(storage_path())];
+            // 1.16.6: the core folder apart has a secret name too: the page address must not list it
+            if (self::baseUrl() !== $base) $targets[self::baseUrl() . '/'] = ['listing', basename(BASE_PATH) . '/'];
             $reached = false;
             $code_exposed = [];
             foreach ($targets as $url => [$kind, $needle]) {

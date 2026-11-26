@@ -10,7 +10,7 @@
 //  - new notices show as a toast only when this device does not get system notifications (to avoid
 //    showing the same notice twice); the badge always updates;
 //  - the service worker asks the page whether it has unsaved changes before following a notice.
-import { appUrl, meta, toast } from './core.js?v=1.16.5';
+import { appUrl, meta, toast } from './core.js?v=1.16.6';
 
 const POLL_MS = 60000;
 let latest = null;

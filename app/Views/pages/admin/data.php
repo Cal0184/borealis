@@ -13,7 +13,7 @@
   <?php elseif ($ex['status'] === 'safe'): ?>
     <p class="notice"><?= icon('check', 'sm') ?> Los datos privados no se pueden descargar desde internet. Comprobado <?= e(fmt_datetime(gmdate('Y-m-d H:i:s', (int)$ex['checked_at']))) ?>.<?= $ex['detail'] ? ' ' . e($ex['detail']) : '' ?></p>
   <?php else: ?>
-    <p class="notice">No se pudo comprobar automáticamente<?= $ex['detail'] ? ': ' . e($ex['detail']) : '' ?>. Compruébalo abriendo <code><?= e(\Borealis\Services\Exposure::baseUrl()) ?>/storage/.htaccess</code> en el navegador: debe responder «Prohibido» (403) o «No encontrado» (404).</p>
+    <p class="notice">No se pudo comprobar automáticamente<?= $ex['detail'] ? ': ' . e($ex['detail']) : '' ?>. Compruébalo abriendo <code><?= e(\Borealis\Services\Exposure::coreUrl() . (($__rel = \Borealis\Services\Exposure::relative(storage_path())) !== null ? "/" . $__rel : "/storage")) ?>/.htaccess</code> en el navegador: debe responder «Prohibido» (403) o «No encontrado» (404).</p>
   <?php endif; ?>
   <p class="small" data-storage-place="<?= e($place) ?>"><strong>Dónde están los datos privados:</strong>
     <?= $place === 'outside' ? 'fuera de la carpeta web (ninguna dirección de internet llega a ellos).' : ($place === 'secret' ? 'en una carpeta con nombre secreto dentro de Borealis.' : 'en <code>storage/</code>, dentro de la carpeta web.') ?></p>
