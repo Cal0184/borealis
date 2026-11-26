@@ -93,7 +93,10 @@ final class Exposure
             // 1.16.5: the data folder where it is now (nothing to ask when it is outside the web folder)
             $targets = [];
             $rel = self::relative(storage_path());
-            if ($placement !== 'outside' && $rel !== null) $targets[$base . '/' . $rel . '/' . $probeName] = ['storage', $secret];
+            // 1.16.6: a folder with a secret name is downloadable by design if someone knows the name (Nginx serves
+            // files): asking for it by name proves nothing and kept the alert red forever. What matters there
+            // is that no address lists the folders (below), so the name cannot be found.
+            if ($placement === 'web' && $rel !== null) $targets[$base . '/' . $rel . '/' . $probeName] = ['storage', $secret];
             $targets[$base . '/config/config.php'] = ['php', '<?php'];
             $targets[$base . '/database/migrations/001_core.sql'] = ['code', 'CREATE TABLE'];
             if ($placement === 'secret') $targets[$base . '/'] = ['listing', basename(storage_path())];
